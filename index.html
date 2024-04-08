@@ -1,0 +1,716 @@
+<html>
+
+<head>
+
+  <meta charset="utf-8">
+  <title>novon</title>
+  <meta name="description" content="novon - decentralised streaming platform">
+  <meta name="author" content="Mutsi">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- FONT
+–––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link href="https://fonts.googleapis.com/css?family=Raleway:400,300,600" rel="stylesheet" type="text/css">
+
+  <!-- CSS
+–––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="stylesheet" href="./lib/video-js.css" />
+  <link rel="stylesheet" href="./css/normalize.css">
+  <link rel="stylesheet" href="./css/skeleton.css">
+  <link rel="stylesheet" href="./css/streaming.css">
+
+  <!-- Favicon
+–––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="icon" type="image/png" href="images/favicon.png">
+
+</head>
+
+<body>
+
+  <script src="./lib/mux.min.js"></script>
+  <script src="./lib/nkn.js"></script>
+  <script src="./lib/video.min.js"></script>
+
+  <div class="navbar-spacer"></div>
+  <nav class="navbar">
+    <div class="container">
+      <ul class="navbar-list">
+
+        <li class="navbar-item"><img class="navbar-link" src="./svg/monitor.svg" style="margin-top: 7px;"></li>
+        <li class="navbar-item"><a class="navbar-link">Dashboard</a></li>
+        <li class="navbar-item"><a href="https://github.com/MutsiMutsi/go-novon/" target="_blank" class="navbar-link">How to stream</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="content-container" style="width: calc(100% - 320px); float: left;">
+    <div id="previewContainer" class="container stream-preview-container">
+      <div class="stream-preview stream-preview-placeholder">
+        <a><img id="thumbnail" class="stream-preview-image"></a>
+        <h6 style="margin-bottom: 0.5rem;">Live streams will show up here...</h6>
+      </div>
+    </div>
+    <div class="stream-container">
+      <video id='streamPlayer' class="video-js" controls autoplay data-setup='{"fill": true}'></video>
+      <div>
+        <div id="streamFooter" style="float:left; padding-left: 10px; padding-top: 5px;"></div>
+        <div style="float: right; position: relative;top: 5px;">
+          <svg style="scale:0.75;" xmlns=" http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dcdcdc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg><span id="viewCount" style="position: relative; top: -8px; margin-left:5px; margin-right: 10px;">-</span>
+        </div>
+      </div>
+    </div>
+    <div id="chatbox" class="chat-container">
+      <a class="donate-button" style="display: none;">
+        <svg class="donate-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-hexagon">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        </svg>
+      </a>
+      <div contenteditable="false" type="text" id="chat-input" autocomplete="off">Join a stream to chat</div>
+      <div class="progress-line"></div>
+
+      <div class="donate-popup">
+        <div style="padding: 1rem;">
+          <h6 style="text-align: center;">donate nkn<br>
+            <span style="font-size:10px">a 0.1 nkn network transaction fee is incurred for fast confirmation and fair-use of the nkn network node operators.</span>
+
+          </h6>
+          <div class="row" style="text-align: center;">
+            <div class="six columns">
+              Your balance:
+              <h6 class="wallet-balance">loading balance</h6>
+            </div>
+            <div class="six columns">
+              Your donation:
+              <h6 class="donate-amount">0</h6>
+            </div>
+          </div>
+          <div class="row" style="text-align: center;">
+            <div class="two columns"><a id="donateSend1" class="donate-send-button">1</a></div>
+            <div class="two columns"><a id="donateSend2" class="donate-send-button">2</a></div>
+            <div class="two columns"><a id="donateSend5" class="donate-send-button">5</a></div>
+            <div class="two columns"><a id="donateSend10" class="donate-send-button">10</a></div>
+            <div class="two columns"><a id="donateSend25" class="donate-send-button">25</a></div>
+            <div class="two columns"><a id="donateSend100" class="donate-send-button">100</a></div>
+          </div>
+          <h6 class="error-message">error message</h6>
+        </div>
+      </div>
+      <div id="messagesBox">
+      </div>
+    </div>
+    <div id="collapse-btn">
+      <img src="./svg/chevron-left.svg">
+    </div>
+
+    <div class="popup" id="connection-indicator">
+      <span id="connection-label">Connecting to the NKN network</span>
+      <br>
+      <span id="subclients-connected">initiating...</span>
+    </div>
+  </div>
+
+  <script>
+    class Semaphore {
+      constructor(initialPermits = 1) {
+        this.permits = initialPermits;
+        this.queue = [];
+      }
+
+      async acquire() {
+        return new Promise((resolve) => {
+          if (this.permits > 0) {
+            this.permits--;
+            resolve();
+          } else {
+            this.queue.push(resolve);
+          }
+        });
+      }
+
+      release() {
+        if (this.queue.length > 0) {
+          const resolve = this.queue.shift();
+          resolve();
+        } else {
+          this.permits++;
+        }
+      }
+    }
+  </script>
+
+  <script>
+    const chatbox = document.getElementById('chatbox');
+    const messagesBox = document.getElementById('messagesBox');
+    const chatInput = document.getElementById('chat-input');
+    const collapseBtn = document.getElementById('collapse-btn');
+    const contentContainer = document.querySelector('.content-container');
+    const streamPreviewContainer = document.querySelector('.stream-preview-container');
+
+    const appendSemaphore = new Semaphore(1);
+
+    var client = null;
+    var firstChunk = true;
+    var watchingStreamAddress = '';
+    var sourceBuffer = null;
+    var transmuxer = null;
+
+    var streamViewers = {};
+    var streamPreviews = {};
+
+    // Replace this value with your files codec info
+    const mime = 'video/mp4; codecs="mp4a.40.2,avc1.64001f"';
+    var isPlaying = false;
+    var segmentsBehind = 0;
+
+    const donationRegex = /donate[0-9]+/g
+    const txFee = 0.1;
+    var walletBalance = 0;
+    var messageDonationTotal = 0;
+
+    videojs('streamPlayer').posterImage.setSrc('./images/poster.png');
+    videojs('streamPlayer').posterImage.show();
+    videojs('streamPlayer').bigPlayButton.hide();
+
+
+    setupClient(4).then((newClient) => {
+      client = newClient;
+
+      document.getElementById('connection-indicator').style.display = 'none';
+
+      setInterval(() => {
+        if (watchingStreamAddress != '') {
+          client.send(watchingStreamAddress, 'ping', { noReply: true });
+          client.send(watchingStreamAddress, 'viewcount').then((reply => {
+            const count = new TextDecoder("utf-8").decode(reply);
+            streamViewers[watchingStreamAddress] = count;
+            document.getElementById('viewCount').innerHTML = count;
+          }));
+        }
+      }, 10000);
+
+      getStreamers();
+      setInterval(() => {
+        getStreamers()
+      }, 30000);
+
+      client.onMessage(({ src, payload }) => {
+
+        if (src != watchingStreamAddress) {
+          return;
+        }
+
+        console.log('segment received');
+        if (payload instanceof Uint8Array) {
+
+          if (isChatMessage(payload)) {
+            const chatMsg = uint8ArrayToJsonString(payload)
+            //if (chatMsg.src != client.addr) {
+            addMessage(chatMsg.src.substring(0, 6), chatMsg.text, getUserColor(chatMsg.src))
+            //}
+            return;
+          }
+
+          if (firstChunk) {
+            appendFirstSegment(payload);
+            firstChunk = false;
+          } else {
+            appendNextSegment(payload);
+          }
+        }
+      });
+    })
+
+    async function appendFirstSegment(chunk) {
+      await appendSemaphore.acquire()
+      try {
+        let mediaSource = new MediaSource();
+        transmuxer = new muxjs.mp4.Transmuxer();
+
+        video = document.querySelector('video');
+        video.src = URL.createObjectURL(mediaSource);
+        videojs('streamPlayer').controlBar.progressControl.hide();
+
+
+        videojs('streamPlayer').on(['waiting', 'pause'], function () {
+          isPlaying = false;
+        });
+
+        videojs('streamPlayer').on('playing', function () {
+          isPlaying = true;
+          segmentsBehind = 0;
+        });
+
+        const waitForOpen = new Promise((resolve) => {
+          mediaSource.addEventListener("sourceopen", resolve);
+        })
+
+        await waitForOpen;
+
+        URL.revokeObjectURL(video.src);
+
+        sourceBuffer = mediaSource.addSourceBuffer(mime);
+        sourceBuffer.addEventListener('updateend', () => {
+          if (!isPlaying) {
+            if (!isPlaying && segmentsBehind > 3) {
+              videojs.players.streamPlayer.liveTracker.seekToLiveEdge()
+              segmentsBehind = 0;
+            }
+            segmentsBehind++;
+          }
+        });
+        transmuxer.on('data', async (segment) => {
+          let data = new Uint8Array(segment.initSegment.byteLength + segment.data.byteLength);
+          data.set(segment.initSegment, 0);
+          data.set(segment.data, segment.initSegment.byteLength);
+          console.log(muxjs.mp4.tools.inspect(data));
+          while (sourceBuffer.updating) {
+            await new Promise(r => setTimeout(r, 1));
+          }
+          sourceBuffer.appendBuffer(data);
+          // reset the 'data' event listener to just append (moof/mdat) boxes to the Source Buffer
+          transmuxer.off('data');
+        })
+        transmuxer.push(chunk);
+        transmuxer.flush();
+      }
+      finally {
+        appendSemaphore.release()
+      }
+    }
+
+    function appendNextSegment(chunk) {
+      transmuxer.on('data', async (segment) => {
+        await appendSemaphore.acquire()
+        try {
+          while (sourceBuffer.updating) {
+            await new Promise(r => setTimeout(r, 1));
+          }
+          sourceBuffer.appendBuffer(new Uint8Array(segment.data));
+          transmuxer.off('data');
+        }
+        finally {
+          appendSemaphore.release()
+        }
+      })
+      transmuxer.push(chunk);
+      transmuxer.flush();
+    }
+
+    // note: `buffer` arg can be an ArrayBuffer or a Uint8Array
+    async function bufferToBase64(buffer) {
+      // use a FileReader to generate a base64 data URI:
+      const base64url = await new Promise(r => {
+        const reader = new FileReader()
+        reader.onload = () => r(reader.result)
+        reader.readAsDataURL(new Blob([buffer]))
+      });
+      // remove the `data:...;base64,` part from the start
+      return base64url.slice(base64url.indexOf(',') + 1);
+    }
+
+    sizeVideo();
+    window.onresize = () => {
+      sizeVideo();
+    };
+
+    function sizeVideo() {
+      const el = document.querySelector('.stream-container');
+      const bounds = el.getBoundingClientRect();
+      const aspect = 9.0 / 16.0;
+
+      const maxHeight = window.innerHeight - bounds.top - 36; // Maximum allowed height
+
+      // Calculate desired height based on aspect ratio
+      const aspectHeight = bounds.width * aspect;
+
+      // Set height based on constraints
+      el.style.height = Math.min(maxHeight, aspectHeight) + 'px';
+    }
+
+    let isCollapsed = false;
+
+    function addMessage(username, message, color) {
+
+      const donateMatches = [...message.matchAll(donationRegex)];
+      donateMatches.forEach(match => {
+        const amount = parseInt(match[0].replace('donate', ''));
+        if (amount != 0) {
+          message = message.replace(match[0], `
+        <span style="color: #0fa0ce; padding: 2px 2px 2px 2px; background-color: #ffffff0f; border-radius: 5px;">
+          <svg style="scale: 0.7;position: relative;top: 7; margin-top: -10px;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          </svg>${amount} NKN
+        </span>`)
+        }
+
+      });
+
+      const msgElement = document.createElement('div');
+      msgElement.classList.add('message');
+      msgElement.innerHTML = `<span><span class="username" style="color: ${color}">${username}</span>: ${message}</span>`;
+      messagesBox.appendChild(msgElement);
+
+      // Scroll to bottom after adding new message
+      messagesBox.scrollTop = Number.MAX_SAFE_INTEGER;
+    }
+
+    // Handle chat input submission (replace with your logic to send message)
+    chatInput.addEventListener('keydown', (event) => {
+      if (event.keyCode === 13) { // Enter key pressed
+        event.preventDefault()
+        const message = chatInput.textContent.trim();
+        sendMessage(message);
+      }
+    });
+
+    chatInput.addEventListener('keyup', (event) => {
+      if (event.keyCode === 13) { // Enter key pressed
+        event.preventDefault()
+        console.log(chatInput.textContent);
+      }
+    });
+
+    collapseBtn.addEventListener('click', () => {
+      isCollapsed = !isCollapsed;
+      chatbox.style.width = isCollapsed ? '0px' : '300px';
+      chatbox.style.padding = isCollapsed ? '0px' : '10px';
+      collapseBtn.classList.toggle('collapsed');
+      collapseBtn.style.right = isCollapsed ? '0px' : '300px';
+      contentContainer.style.width = isCollapsed ? '100%' : 'calc(100% - 320px)';
+      sizeVideo();
+    });
+
+    let maxChars = 500;
+    chatInput.addEventListener('keydown', (event) => {
+      if (event.keyCode == 8 || event.keyCode == 16 || event.keyCode == 17 ||
+        event.keyCode == 18 || event.keyCode == 37 || event.keyCode == 38 ||
+        event.keyCode == 39 || event.keyCode == 40 || event.keyCode == 46) {
+        return;
+      }
+      if (chatInput.textContent.length >= maxChars) {
+        event.preventDefault();
+      }
+    })
+
+    function getUserColor(userId) {
+      const colors = [
+        "#AACCFF",  // Light Blue
+        "#CDFF00",  // Lime Green
+        "#FFFF00",  // Lemon Yellow
+        "#FF00FF",  // Magenta
+        "#00FFFF",  // Cyan
+        "#FF7F00",  // Orange
+        "#FFC0CB",  // Light Pink
+        "#E6E6FA",  // Lavender
+        "#40E0D0",  // Turquoise
+        "#FFFFFF"   // White
+      ];
+      return colors[parseInt(userId.substring(0, 4), 16) % 10];
+    }
+
+    const chatMessageBinaryPrefix = new Uint8Array([123, 34, 105, 100, 34, 58]);
+    function isChatMessage(buffer) {
+      if (buffer.length < chatMessageBinaryPrefix.length) return false;
+      for (let i = 0; i < chatMessageBinaryPrefix.length; i++) {
+        if (buffer[i] !== chatMessageBinaryPrefix[i]) return false;
+      }
+      return true;
+    }
+
+    function uint8ArrayToJsonString(buffer) {
+      const textDecoder = new TextDecoder("utf-8");
+      const jsonString = textDecoder.decode(buffer);
+      try {
+        return JSON.parse(jsonString);
+      } catch (error) {
+        // Handle potential parsing errors
+        console.error("Error parsing JSON string:", error);
+        return null;
+      }
+    }
+
+    async function setupClient(targetClients) {
+      let client = new nkn.MultiClient({
+        numSubClients: targetClients,
+        originalClient: false,
+        seed: '',
+        //rpcServerAddr: 'http://85.215.219.214:30003',
+        //tls: true,
+      });
+
+      let connectedNodes = 0;
+      let failedNodes = 0;
+
+      for (const [key, value] of Object.entries(client.clients)) {
+        value.eventListeners.connect.push(() => {
+          connectedNodes++;
+          let baseText = `${connectedNodes}/${4} nodes`;
+          let warningText = '\ntrying to find more nodes...'
+          document.getElementById('subclients-connected').textContent = baseText + (connectedNodes < 4 ? warningText : '');
+        });
+
+        value.eventListeners.connectFailed.push(() => {
+          console.warn(key, 'failed');
+          failedNodes++;
+          let baseText = `${connectedNodes}/${4} nodes`;
+          let warningText = '\ntrying to find more nodes...'
+          document.getElementById('subclients-connected').textContent = baseText + (connectedNodes < 4 ? warningText : '');
+        });
+      }
+
+      while (connectedNodes + failedNodes < targetClients && connectedNodes < 4) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      if (connectedNodes >= 4) {
+        return client;
+      } else {
+        targetClients += failedNodes;
+        console.log('try again:', targetClients);
+        return setupClient(targetClients);
+      }
+    }
+
+    async function getStreamers() {
+      const result = await client.getSubscribers('novon', { txPool: true, meta: true });
+      const streamers = { ...result.subscribers, ...result.subscribersInTxPool };
+
+      //streamPreviewContainer.innerHTML = '';
+
+      Object.entries(streamers).forEach(([key, value]) => {
+        createStreamPreviewElement(key, value);
+      });
+    }
+
+    function createStreamPreviewElement(address, title) {
+      const htmlString =
+        `<div class="stream-preview">
+          <a><img id="thumbnail" class="stream-preview-image"></a>
+          <h6 style="margin-bottom: 0.5rem;">${title}</h6>
+          <span class="address">
+            ${address}
+          </span>
+          <div style="position: relative; bottom: 71px; left: 1px; background: #00000088; width: fit-content; border-radius: 5px; height: 23px; padding-right: 3px;">
+            <svg style="scale: 0.75;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dcdcdc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg><span id="${address}-viewcount" style="font-size: 14; position: relative; top: -8px">-</span>
+          </div>
+        </div>`
+
+
+
+      // Parse the HTML string (optional, if security is a concern)
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, "text/html");
+      const streamPreview = doc.body.firstChild; // Get the parsed div element
+
+      //set onclicker
+      streamPreview.children[0].onclick = () => {
+        watchStream(address);
+        document.getElementById('streamFooter').innerHTML = `<h6 style="margin-bottom: 0px">${title} - ${address}</h6>`
+      };
+      // Request channel info
+      client.send(address, 'thumbnail').then(async (reply) => {
+        // Assuming you have the base64 string for the JPEG image in a variable called base64String
+        const base64 = await bufferToBase64(reply);
+        streamPreview.children[0].children[0].src = `data:image/jpeg;base64,${base64}`; // Set the base64 data URI
+
+        if (streamPreviewContainer.contains(streamPreviews[address])) {
+          streamPreviewContainer.replaceChild(streamPreview, streamPreviews[address]);
+        } else {
+          streamPreviewContainer.appendChild(streamPreview);
+        }
+        streamPreviews[address] = streamPreview;
+      }).catch((err) => {
+        if (streamPreview[address] != null) {
+          streamPreviewContainer.removeChild(streamPreviews[address]);
+          delete streamPreviews[address];
+        }
+      });
+
+      client.send(address, 'viewcount').then((reply) => {
+        const count = new TextDecoder("utf-8").decode(reply);
+        streamViewers[address] = count;
+        streamPreview.children[3].children[1].innerHTML = count;
+      }).catch((err) => {
+        if (streamPreview[address] != null) {
+          streamPreviewContainer.removeChild(streamPreviews[address]);
+          delete streamPreviews[address];
+        }
+      });
+
+    }
+
+    function watchStream(address) {
+      clearChat();
+
+      videojs.players.streamPlayer.posterImage.hide();
+      videojs.players.streamPlayer.bigPlayButton.hide()
+      videojs.players.streamPlayer.reset()
+      videojs.players.streamPlayer.bigPlayButton.hide()
+      videojs.players.streamPlayer.loadingSpinner.show()
+
+      //tell the host we are gone
+      if (watchingStreamAddress != '') {
+        client.send(watchingStreamAddress, 'disconnect', { noReply: true });
+      }
+
+      document.getElementById('viewCount').innerHTML = streamViewers[address];
+
+      firstChunk = true;
+      watchingStreamAddress = address;
+      chatInput.setAttribute('contenteditable', true);
+      document.querySelector('.donate-button').style.display = 'block';
+      chatInput.textContent = '';
+      client.send(address, 'ping', { noReply: true });
+      console.log('ping sent');
+    }
+
+    function clearChat() {
+      const childElements = messagesBox.children;
+      for (let i = childElements.length - 1; i >= 0; i--) {
+        const child = childElements[i];
+        if (child.classList.contains('message')) {
+          messagesBox.removeChild(child);
+        }
+      }
+    }
+
+    document.querySelector('.donate-button').onclick = () => {
+      if (document.querySelector('.donate-popup').classList.contains('show')) {
+        document.querySelector('.donate-popup').classList.remove('show');
+      } else {
+        openDonatePopup();
+      }
+    }
+
+    document.getElementById('donateSend1').onclick = () => {
+      chatInput.textContent += " donate1 ";
+    }
+
+    async function sendMessage(text) {
+      if (text) {
+
+        document.querySelector('.progress-line').style.display = 'block';
+        chatInput.setAttribute('contenteditable', false);
+
+        let hash = null;
+
+        if (messageDonationTotal > 0) {
+
+          //get the donationid
+          const donationId = await client.send(watchingStreamAddress, "donationid", { responseTimeout: 5000 });
+          const donationHex = new TextDecoder("utf-8").decode(donationId);
+
+          console.log("donation id received", donationHex);
+
+          let wallet = new nkn.Wallet({
+            seed: client.getSeed(),
+          });
+          const walletAddress = nkn.Wallet.publicKeyToAddress(watchingStreamAddress);
+
+          try {
+            const testDonationAmount = messageDonationTotal == 1 ? 1 : 0;
+            hash = await wallet.transferTo(walletAddress, testDonationAmount, { fee: 0, attrs: donationHex });
+            console.log(hash);
+            document.querySelector('.donate-popup').classList.remove('show');
+          } catch (err) {
+            chatInput.setAttribute('contenteditable', true);
+            document.querySelector('.progress-line').style.display = 'none';
+
+            let errMsg = '';
+            if (err.code == 45021) {
+              errMsg = 'insufficient funds';
+            } else {
+              errMsg = err.message.split(', ')[1];
+            }
+
+            document.querySelector('.error-message').textContent = errMsg;
+            document.querySelector('.error-message').style.display = 'block';
+
+            //return;
+          }
+        }
+
+        let chatMsg = {
+          type: 'chat-message',
+          content: { text: text }
+        }
+        if (hash != null) {
+          chatMsg.content.hash = hash;
+        }
+
+        const reply = await client.send(watchingStreamAddress, JSON.stringify(chatMsg), { noReply: hash == null, responseTimeout: 60000 });
+        if (reply) {
+          const replyString = new TextDecoder().decode(reply);
+          if (replyString != "success") {
+            addMessage("ERROR", replyString.replace('error: ', ''), "#FF0000")
+          }
+        }
+
+        chatInput.textContent = ''; // Clear input field after sending message
+        chatInput.setAttribute('contenteditable', true);
+        document.querySelector('.progress-line').style.display = 'none';
+      }
+    }
+
+    const config = {
+      characterData: true, attributes: true, childList: true, subtree: true
+    };
+    const observer = new MutationObserver(processChatInput);
+    observer.observe(chatInput, config);
+
+
+    function processChatInput() {
+      const text = chatInput.textContent;
+      const donateMatches = [...text.matchAll(donationRegex)];
+
+      messageDonationTotal = 0;
+      donateMatches.forEach(match => {
+        const amount = parseInt(match[0].replace('donate', ''));
+        messageDonationTotal += amount;
+      });
+
+      if (messageDonationTotal > 0) {
+        openDonatePopup();
+      } else {
+        document.querySelector('.donate-amount').textContent = 0;
+      }
+    }
+
+    async function openDonatePopup() {
+      document.querySelector('.donate-amount').textContent = messageDonationTotal;
+      if (walletBalance - txFee < messageDonationTotal) {
+        document.querySelector('.donate-amount').style.boxShadow = 'inset 0 0 3px #f00';
+      } else {
+        document.querySelector('.donate-amount').style.boxShadow = '';
+      }
+
+      if (document.querySelector('.donate-popup').classList.contains('show')) {
+        return;
+      }
+
+      document.querySelector('.donate-popup').classList.add('show');
+      //load balance
+      let wallet = new nkn.Wallet({
+        seed: client.getSeed(),
+      });
+      walletBalance = await wallet.getBalance();
+      document.querySelector('.wallet-balance').textContent = walletBalance;
+
+      if (walletBalance - txFee < messageDonationTotal) {
+        document.querySelector('.donate-amount').style.boxShadow = 'inset 0 0 3px #f00';
+      } else {
+        document.querySelector('.donate-amount').style.boxShadow = '';
+      }
+    }
+
+  </script>
+
+</body>
+
+</html>
