@@ -21,7 +21,7 @@
 
   <!-- Favicon
 –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link rel="icon" type="image/svg" href="images/favicon.svg">
 
 </head>
 
@@ -36,7 +36,7 @@
     <div class="container">
       <ul class="navbar-list">
 
-        <li class="navbar-item"><img class="navbar-link" src="./svg/monitor.svg" style="margin-top: 7px;"></li>
+        <li class="navbar-item"><img class="navbar-link" src="./images/favicon.svg" style="margin-top: 7px; width: 25px;"></li>
         <li class="navbar-item"><a class="navbar-link">Dashboard</a></li>
         <li class="navbar-item"><a href="https://github.com/MutsiMutsi/go-novon/" target="_blank" class="navbar-link">How to stream</a></li>
       </ul>
@@ -170,7 +170,7 @@
     var walletBalance = 0;
     var messageDonationTotal = 0;
 
-    videojs('streamPlayer').posterImage.setSrc('./images/poster.png');
+    videojs('streamPlayer').posterImage.setSrc("./images/favicon.svg");
     videojs('streamPlayer').posterImage.show();
     videojs('streamPlayer').bigPlayButton.hide();
 
