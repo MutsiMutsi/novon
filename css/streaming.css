@@ -1,3 +1,16 @@
+.msg-delete-btn {
+  position: absolute;
+  right: 8;
+  padding: 0px;
+  scale: 0.75;
+  margin-top: -2px;
+  display: none;
+}
+
+.message:hover .msg-delete-btn {
+  display: inline-block;
+}
+
 .error-message {
   color: rgb(255, 108, 108);
   text-align: center;
@@ -88,7 +101,7 @@
 }
 
 .donate-popup.show {
-  max-height: 180px;
+  max-height: 240px;
   transition: max-height 0.15s ease-out;
 }
 
@@ -98,6 +111,15 @@
 
 .stream-preview-placeholder {
   display: none; /* Hide the container by default (optional) */
+}
+
+.stream-preview-image {
+  transition: all 100ms ease-out;
+}
+.stream-preview-image:hover {
+  scale: 0.98;
+  translate: -1px -1px;
+  transition: all 100ms ease-out;
 }
 
 .content-container {
@@ -232,6 +254,7 @@ body::-webkit-scrollbar {
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  width: 314px;
 }
 
 .message {
@@ -239,12 +262,22 @@ body::-webkit-scrollbar {
   display: flex;
   align-items: flex-start;
   overflow-wrap: anywhere;
+  width: 100%;
   /* Additional styles for message layout */
+}
+
+.message:hover {
+  background-color: #ffffff11;
+  border-radius: 5px;
+}
+
+.message:focus {
+  background-color: #ffffff11;
+  border-radius: 5px;
 }
 
 .username {
   font-weight: bold;
-  margin-right: 1px;
   /* Additional styles for the username element */
 }
 
@@ -285,6 +318,7 @@ body {
 
 a {
   cursor: pointer;
+  color: #dcdcdc;
 }
 
 .container {
@@ -348,10 +382,9 @@ a {
   text-transform: uppercase;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.2rem;
   margin-right: 35px;
   text-decoration: none;
-  line-height: 4rem;
+  line-height: 42px;
   color: #dcdcdc;
 }
 .navbar-link.active {
