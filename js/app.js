@@ -1,5 +1,9 @@
 class StreamApp {
     constructor(startupWallet) {
+        this.startApp(startupWallet);
+    }
+
+    async startApp(startupWallet) {
         document.getElementById("login-popup").style.display = "none";
         document.getElementById("connection-indicator").style.display = 'block';
 
@@ -56,64 +60,62 @@ class StreamApp {
         videojs('streamPlayer').posterImage.show();
         videojs('streamPlayer').bigPlayButton.hide();
 
-        setupClient(numSubClients).then((newClient) => {
-            client = newClient;
+        client = await setupClient(numSubClients);
 
-            document.getElementById('connection-indicator').style.display = 'none';
-            document.getElementById('blackoutPanel').style.display = 'none';
+        document.getElementById('connection-indicator').style.display = 'none';
+        document.getElementById('blackoutPanel').style.display = 'none';
 
-            setInterval(() => {
-                if (watchingStreamAddress != '') {
-                    client.send(watchingStreamAddress, 'ping', { noReply: true });
-                    client.send(watchingStreamAddress, 'viewcount').then((reply => {
-                        streamViewers[watchingStreamAddress] = reply;
-                        document.getElementById('viewCount').innerHTML = reply;
-                    })).catch((err) => {
-                        if (streamPreviews[watchingStreamAddress] != null) {
-                            streamPreviewContainer.removeChild(streamPreviews[watchingStreamAddress]);
-                            delete streamPreviews[watchingStreamAddress];
-                        }
-                    });
-                }
-            }, 10000);
+        setInterval(() => {
+            if (watchingStreamAddress != '') {
+                client.send(watchingStreamAddress, 'ping', { noReply: true });
+                client.send(watchingStreamAddress, 'viewcount').then((reply => {
+                    streamViewers[watchingStreamAddress] = reply;
+                    document.getElementById('viewCount').innerHTML = reply;
+                })).catch((err) => {
+                    if (streamPreviews[watchingStreamAddress] != null) {
+                        streamPreviewContainer.removeChild(streamPreviews[watchingStreamAddress]);
+                        delete streamPreviews[watchingStreamAddress];
+                    }
+                });
+            }
+        }, 10000);
 
-            getStreamers();
-            setInterval(() => {
-                getStreamers()
-            }, 30000);
+        getStreamers();
+        setInterval(() => {
+            getStreamers()
+        }, 30000);
 
-            client.onMessage(({ src, payload }) => {
+        client.onMessage(({ src, payload }) => {
 
-                if (src != watchingStreamAddress) {
+            if (src != watchingStreamAddress) {
+                return;
+            }
+            if (payload instanceof Uint8Array) {
+
+                if (isChatMessage(payload)) {
+                    const chatMsg = uint8ArrayToJsonString(payload)
+                    //if (chatMsg.src != client.addr) {
+                    addMessage(chatMsg)
+                    //}
                     return;
                 }
-                if (payload instanceof Uint8Array) {
 
-                    if (isChatMessage(payload)) {
-                        const chatMsg = uint8ArrayToJsonString(payload)
-                        //if (chatMsg.src != client.addr) {
-                        addMessage(chatMsg)
-                        //}
-                        return;
+                handleChunk(payload, (id, data) => {
+                    //console.log("segment complete id:", id, "length:", data.length)
+                    if (firstChunk) {
+                        appendFirstSegment(data);
+                        firstChunk = false;
+                    } else {
+                        appendNextSegment(data);
                     }
-
-                    handleChunk(payload, (id, data) => {
-                        //console.log("segment complete id:", id, "length:", data.length)
-                        if (firstChunk) {
-                            appendFirstSegment(data);
-                            firstChunk = false;
-                        } else {
-                            appendNextSegment(data);
-                        }
-                    });
-                } else {
-                    var msgObj = JSON.parse(payload);
-                    if (msgObj.type == 'delete-chat-message') {
-                        deleteMessage(msgObj.content.msgId);
-                    }
+                });
+            } else {
+                var msgObj = JSON.parse(payload);
+                if (msgObj.type == 'delete-chat-message') {
+                    deleteMessage(msgObj.content.msgId);
                 }
-            });
-        })
+            }
+        });
 
         function handleChunk(data, onSegmentComplete) {
 
@@ -401,8 +403,7 @@ class StreamApp {
                 numSubClients: targetClients,
                 originalClient: false,
                 seed: wallet.getSeed(),
-                //rpcServerAddr: 'http://85.215.219.214:30003',
-                //tls: true,
+                tls: true,
             });
 
             let connectedNodes = 0;
@@ -429,12 +430,10 @@ class StreamApp {
                 await new Promise(r => setTimeout(r, 50));
             }
 
-            if (connectedNodes >= numSubClients) {
+            if (connectedNodes > 0) {
                 return client;
             } else {
-                targetClients += failedNodes;
-                console.log('try again:', targetClients);
-                return setupClient(targetClients);
+                alert("No nodes found to connect, if the issue persists try joining as guest and please report.")
             }
         }
 
