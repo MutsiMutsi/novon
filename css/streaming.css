@@ -1,3 +1,23 @@
+.panel {
+  width: 320px;
+  display: inline-block;
+  margin-left: 16px;
+  text-align: left;
+}
+
+#panelContainer {
+  margin: 16px;
+  margin-top: 32px;
+  text-align: center;
+}
+
+#showWalletAddress {
+  padding: 5px;
+  border: #ffffff66 solid 1px;
+  border-radius: 5px;
+  user-select: all;
+}
+
 .msg-delete-btn {
   position: absolute;
   right: 8;

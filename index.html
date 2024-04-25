@@ -50,7 +50,10 @@
   <script src="./lib/mux.min.js"></script>
   <script src="./lib/nkn.js"></script>
   <script src="./lib/video.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.min.js"></script>
+  <script src="./lib/zxcvbn.min.js"></script>
+  <script src="./lib/purify.min.js"></script>
+  <script src="./lib/marked.umd.min.js"></script>
+
   <script src="./js/app.js"></script>
   <script src="./js/wallet-manager.js"></script>
 
@@ -60,7 +63,7 @@
       <ul class="navbar-list">
 
         <li class="navbar-item"><img class="navbar-link" src="./images/favicon.svg" style="margin-top: 7px; width: 25px;"></li>
-        <li class="navbar-item"><a class="navbar-link">Dashboard</a></li>
+        <li class="navbar-item"><a id="dashboardButton" class="navbar-link">Dashboard</a></li>
         <li class="navbar-item"><a href="https://github.com/MutsiMutsi/go-novon/" target="_blank" class="navbar-link">How to stream</a></li>
       </ul>
     </div>
@@ -84,6 +87,8 @@
           </svg><span id="viewCount" style="position: relative; top: -6px; margin-left:5px; margin-right: 10px;">-</span>
         </div>
       </div>
+      <div id="panelContainer">
+      </div>
     </div>
     <div id="chatbox" class="chat-container">
       <a class="donate-button" style="display: none;">
@@ -96,9 +101,9 @@
 
       <div class="donate-popup">
         <div style="padding: 1rem;">
-          <h6 style="text-align: center;">donate nkn<br>
-            <span style="font-size:12px">a 0.1 nkn network transaction fee is incurred for fast confirmation and fair-use of the nkn network node operators.</span>
-
+          <h6 style="text-align: center;">donate nkn | <a id="depositButton">deposit nkn</a><br>
+            <span id="feeWarningText" style="font-size:12px">a 0.1 nkn network transaction fee is incurred for fast confirmation and fair-use of the nkn network node operators.</span>
+            <span id="showWalletAddress" style="font-size:12px; display: none;"></span>
           </h6>
           <div class="row" style="text-align: center;">
             <div class="six columns">
@@ -196,7 +201,7 @@
       document.getElementById("authButton").onclick = () => {
         try {
           const wallet = WalletManager.OpenExisting(document.getElementById("walletPasswordInput").value);
-          new StreamApp(wallet);
+          new streamApp.initApp(wallet);
         } catch (er) {
           alert(er.message)
         }
@@ -206,10 +211,10 @@
     }
 
     document.getElementById("guestButton").onclick = () => {
-      new StreamApp();
+      new streamApp.initApp(null);
     };
     document.getElementById("proceedAsGuestButton").onclick = () => {
-      new StreamApp();
+      new streamApp.initApp(null);
     };
 
     document.getElementById("joinButton").onclick = () => {
