@@ -43,6 +43,7 @@
             let addressbook = {};
 
             let isGuest = true;
+            var qualityChangedSegmentId = -1;
 
             var wallet = null;
             if (startupWallet != null) {
@@ -59,6 +60,22 @@
             videojs('streamPlayer').posterImage.setSrc("./images/favicon.svg");
             videojs('streamPlayer').posterImage.show();
             videojs('streamPlayer').bigPlayButton.hide();
+
+            // Adding button to the control bar
+            var index = videojs.players.streamPlayer.controlBar.children().length - 2
+            var myButton = videojs.players.streamPlayer.controlBar.addChild('button', {}, index);
+
+            // Create our button's DOM Component
+            var qualityLevelsElement = myButton.el();
+
+            qualityLevelsElement.style.width = "auto";
+
+            qualityLevelsElement.innerHTML = `<select style="display:block; height: auto; border:0" name="qualityControl" id="qualityControl"></select>`;
+
+            document.getElementById("qualityControl").onchange = async (e) => {
+                var replySegmentId = await client.send(watchingStreamAddress, 'quality' + e.target.value);
+                qualityChangedSegmentId = replySegmentId;
+            }
 
             client = await setupClient(numSubClients);
 
@@ -141,6 +158,8 @@
                             document.querySelector('.donate-button').style.display = 'block';
                             chatInput.textContent = '';
 
+                        } else if (id == qualityChangedSegmentId) {
+                            appendFirstSegment(data);
                         } else {
                             appendNextSegment(data);
                         }
@@ -236,7 +255,7 @@
                         let data = new Uint8Array(segment.initSegment.byteLength + segment.data.byteLength);
                         data.set(segment.initSegment, 0);
                         data.set(segment.data, segment.initSegment.byteLength);
-                        //console.log(muxjs.mp4.tools.inspect(data));
+                        console.log(muxjs.mp4.tools.inspect(data));
 
                         while (sourceBuffer.updating) {
                             await new Promise(r => setTimeout(r, 1));
@@ -586,12 +605,23 @@
 
                 client.send(address, 'ping', { noReply: true });
 
-                client.send(address, 'getrole').then((role) => {
-                    myRole = role;
-                });
+                client.send(address, 'channelinfo', { responseTimeout: 10000 }).then((info) => {
+                    var obj = JSON.parse(info);
 
-                client.send(address, 'getpanels', { responseTimeout: 30000 }).then((panels) => {
-                    const panelsArray = JSON.parse(panels);
+                    //Set my role
+                    myRole = obj.role;
+
+                    //Set quality levels if available.
+                    let options = "";
+                    let qLevel = 0;
+                    obj.qualityLevels.forEach((q) => {
+                        options += `<option ${qLevel == 1 ? 'selected="selected"' : ''} value="${qLevel}">${q.Resolution}p${q.Framerate} ${qLevel == 0 ? '(source)' : ''}</option>`;
+                        qLevel++;
+                    });
+                    qualityLevelsElement.children[0].innerHTML = options;
+
+                    //Parse panels
+                    var panelsArray = JSON.parse(obj.panels);
                     const panelsContent = document.getElementById('panelContainer');
 
                     panelsArray.forEach(panel => {
