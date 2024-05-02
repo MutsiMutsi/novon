@@ -8,8 +8,20 @@
             const messagesBox = document.getElementById('messagesBox');
             const chatInput = document.getElementById('chat-input');
             const collapseBtn = document.getElementById('collapse-btn');
+            const chatPopoutBtn = document.getElementById('chat-popout-btn');
             const contentContainer = document.querySelector('.content-container');
             const streamPreviewContainer = document.querySelector('.stream-preview-container');
+
+            const chatProgressLine = document.querySelector('.progress-line')
+            const chatDonateButton = document.querySelector('.donate-button')
+            const chatDepositButton = document.getElementById("depositButton")
+            const chatDonatePopup = document.querySelector('.donate-popup')
+            const chatDonateAmount = document.querySelector('.donate-amount')
+            const chatWalletBalance = document.querySelector('.wallet-balance')
+            const chatErrorMessage = document.querySelector('.error-message')
+
+            var chatPopoutWindow;
+            let isCollapsed = false;
 
             const appendSemaphore = new Semaphore(1);
 
@@ -44,6 +56,14 @@
 
             let isGuest = true;
             var qualityChangedSegmentId = -1;
+
+            if (window.innerWidth < 640) {
+                collapseChat();
+            }
+
+            if (window.mobileAndTabletCheck() == true) {
+                chatPopoutBtn.style.display = 'none';
+            }
 
             var wallet = null;
             if (startupWallet != null) {
@@ -81,6 +101,12 @@
 
             document.getElementById('connection-indicator').style.display = 'none';
             document.getElementById('blackoutPanel').style.display = 'none';
+
+            window.onbeforeunload = () => {
+                if (chatPopoutWindow != null) {
+                    chatPopoutWindow.close();
+                }
+            }
 
             setInterval(() => {
                 if (watchingStreamAddress != '') {
@@ -155,7 +181,7 @@
 
                             //Allow chatting
                             chatInput.setAttribute('contenteditable', true);
-                            document.querySelector('.donate-button').style.display = 'block';
+                            chatDonateButton.style.display = 'block';
                             chatInput.textContent = '';
 
                         } else if (id == qualityChangedSegmentId) {
@@ -321,7 +347,6 @@
                 el.style.height = Math.min(maxHeight, aspectHeight) + 'px';
             }
 
-            let isCollapsed = false;
 
             function addMessage(chatMsg) {
                 var username = chatMsg.src;
@@ -416,6 +441,76 @@
                 collapseBtn.classList.toggle('collapsed');
                 collapseBtn.style.right = isCollapsed ? '0px' : '300px';
                 contentContainer.style.width = isCollapsed ? '100%' : 'calc(100% - 320px)';
+                sizeVideo();
+            });
+
+            function collapseChat() {
+                isCollapsed = true;
+                chatbox.style.width = isCollapsed ? '0px' : '300px';
+                chatbox.style.padding = isCollapsed ? '0px' : '10px';
+                collapseBtn.classList.add('collapsed');
+                collapseBtn.style.right = isCollapsed ? '0px' : '300px';
+                contentContainer.style.width = isCollapsed ? '100%' : 'calc(100% - 320px)';
+                sizeVideo();
+            }
+
+            function unCollapseChat() {
+                isCollapsed = false;
+                chatbox.style.width = isCollapsed ? '0px' : '300px';
+                chatbox.style.padding = isCollapsed ? '0px' : '10px';
+                collapseBtn.classList.remove('collapsed');
+                collapseBtn.style.right = isCollapsed ? '0px' : '300px';
+                contentContainer.style.width = isCollapsed ? '100%' : 'calc(100% - 320px)';
+                sizeVideo();
+            }
+
+            chatPopoutBtn.addEventListener('click', () => {
+                chatPopoutBtn.classList.toggle('popout');
+                unCollapseChat();
+
+                if (chatPopoutWindow == null) {
+                    contentContainer.style.width = "100%";
+                    collapseBtn.style.display = "none";
+                    isCollapsed = true;
+
+                    chatPopoutWindow = window.open("", "", "width=320,height=640, menubar=0, titlebar=0, status=0, toolbar=0");
+                    document.head.querySelectorAll('link, style').forEach(htmlElement => {
+                        chatPopoutWindow.document.head.appendChild(htmlElement.cloneNode(true));
+                    });
+                    chatPopoutWindow.document.body.appendChild(chatbox)
+                    chatPopoutWindow.onresize = () => {
+                        chatPopoutWindow.resizeTo(336, chatPopoutWindow.outerHeight)
+                    }
+
+                    //put chat back from whence it came!
+                    chatPopoutWindow.onbeforeunload = () => {
+                        //place below this element
+                        const el = document.querySelector('.stream-container');
+                        el.parentNode.insertBefore(chatbox, el.nextSibling)
+                    }
+
+                    //put chat back from whence it came!
+                    chatPopoutWindow.onbeforeunload = () => {
+                        //place below this element
+                        const el = document.querySelector('.stream-container');
+                        el.parentNode.insertBefore(chatbox, el.nextSibling)
+                        chatPopoutBtn.classList.toggle('popout');
+                        chatPopoutWindow = null;
+                        collapseBtn.style.display = "block";
+                        unCollapseChat();
+
+                    }
+                } else {
+                    //place below this element
+                    const el = document.querySelector('.stream-container');
+                    el.parentNode.insertBefore(chatbox, el.nextSibling)
+                    chatPopoutWindow.onbeforeunload = () => { };
+                    chatPopoutWindow.close();
+                    chatPopoutWindow = null;
+                    collapseBtn.style.display = "block";
+                    unCollapseChat();
+                }
+
                 sizeVideo();
             });
 
@@ -645,22 +740,22 @@
                 }
             }
 
-            document.querySelector('.donate-button').onclick = () => {
-                if (document.querySelector('.donate-popup').classList.contains('show')) {
-                    document.querySelector('.donate-popup').classList.remove('show');
+            chatDonateButton.onclick = () => {
+                if (chatDonatePopup.classList.contains('show')) {
+                    chatDonatePopup.classList.remove('show');
                 } else {
                     openDonatePopup();
                 }
             }
 
-            document.getElementById('donateSend1').onclick = () => {
+            /*document.getElementById('donateSend1').onclick = () => {
                 chatInput.textContent += " donate1 ";
-            }
+            }*/
 
             async function sendMessage(text) {
                 if (text) {
 
-                    document.querySelector('.progress-line').style.display = 'block';
+                    chatProgressLine.style.display = 'block';
                     chatInput.setAttribute('contenteditable', false);
 
                     let hash = null;
@@ -674,11 +769,11 @@
                         try {
                             hash = await wallet.transferTo(walletAddress, messageDonationTotal, { fee: 0.1, attrs: donationId });
                             console.log(hash);
-                            document.querySelector('.donate-popup').classList.remove('show');
+                            chatDonatePopup.classList.remove('show');
                         } catch (err) {
                             chatInput.setAttribute('contenteditable', true);
                             chatInput.focus();
-                            document.querySelector('.progress-line').style.display = 'none';
+                            chatProgressLine.style.display = 'none';
 
                             let errMsg = '';
                             if (err.code == 45021) {
@@ -687,8 +782,8 @@
                                 errMsg = err.message.split(', ')[1];
                             }
 
-                            document.querySelector('.error-message').textContent = errMsg;
-                            document.querySelector('.error-message').style.display = 'block';
+                            chatErrorMessage.textContent = errMsg;
+                            chatErrorMessage.style.display = 'block';
 
                             return;
                         }
@@ -721,7 +816,7 @@
                     chatInput.textContent = ''; // Clear input field after sending message
                     chatInput.setAttribute('contenteditable', true);
                     chatInput.focus();
-                    document.querySelector('.progress-line').style.display = 'none';
+                    chatProgressLine.style.display = 'none';
                 }
             }
 
@@ -734,8 +829,8 @@
 
             function processChatInput(event) {
                 //clear errors
-                document.querySelector('.error-message').textContent = '';
-                document.querySelector('.error-message').style.display = 'none';
+                chatErrorMessage.textContent = '';
+                chatErrorMessage.style.display = 'none';
 
                 if (chatInput.textContent.length > maxChars) {
                     chatInput.textContent = chatInput.textContent.substring(0, maxChars);
@@ -754,7 +849,7 @@
                 if (messageDonationTotal > 0) {
                     openDonatePopup();
                 } else {
-                    document.querySelector('.donate-amount').textContent = 0;
+                    chatDonateAmount.textContent = 0;
                 }
             }
 
@@ -779,25 +874,25 @@
             }
 
             async function openDonatePopup() {
-                document.querySelector('.donate-amount').textContent = messageDonationTotal;
+                chatDonateAmount.textContent = messageDonationTotal;
                 if (walletBalance - txFee < messageDonationTotal) {
-                    document.querySelector('.donate-amount').style.boxShadow = 'inset 0 0 3px #f00';
+                    chatDonateAmount.style.boxShadow = 'inset 0 0 3px #f00';
                 } else {
-                    document.querySelector('.donate-amount').style.boxShadow = '';
+                    chatDonateAmount.style.boxShadow = '';
                 }
 
-                if (document.querySelector('.donate-popup').classList.contains('show')) {
+                if (chatDonatePopup.classList.contains('show')) {
                     return;
                 }
 
-                document.querySelector('.donate-popup').classList.add('show');
+                chatDonatePopup.classList.add('show');
                 walletBalance = await wallet.getBalance();
-                document.querySelector('.wallet-balance').textContent = walletBalance;
+                chatWalletBalance.textContent = walletBalance;
 
                 if (walletBalance - txFee < messageDonationTotal) {
-                    document.querySelector('.donate-amount').style.boxShadow = 'inset 0 0 3px #f00';
+                    chatDonateAmount.style.boxShadow = 'inset 0 0 3px #f00';
                 } else {
-                    document.querySelector('.donate-amount').style.boxShadow = '';
+                    chatDonateAmount.style.boxShadow = '';
                 }
             }
 
@@ -838,7 +933,7 @@
             }
 
             async function deleteMessage(messageId) {
-                var message = document.querySelector(`[data-message-id="${messageId}"]`);
+                var message = chatbox.querySelector(`[data-message-id="${messageId}"]`);
                 message.querySelector(".chat-text")
                     .innerHTML = `<em style="color: #aaaaaa">message removed</em>`
 
@@ -846,13 +941,13 @@
                 message.children[0].removeChild(message.querySelector('a'));
             }
 
-            document.getElementById("depositButton").onclick = () => {
+            chatDepositButton.onclick = () => {
                 if (!isGuest) {
-                    document.getElementById("showWalletAddress").textContent = wallet.address;
-                    document.getElementById("feeWarningText").textContent = "Deposit NKN to this address:"
-                    document.getElementById("showWalletAddress").style.display = 'inline-block';
+                    chatbox.querySelector("#showWalletAddress").textContent = wallet.address;
+                    chatbox.querySelector("#feeWarningText").textContent = "Deposit NKN to this address:"
+                    chatbox.querySelector("#showWalletAddress").style.display = 'inline-block';
                 } else {
-                    document.getElementById("feeWarningText").textContent = "Please join novon - any funds send to a guest account will be lost."
+                    chatbox.querySelector("#feeWarningText").textContent = "Please join novon - any funds send to a guest account will be lost."
                 }
             }
         }

@@ -334,6 +334,19 @@ body::-webkit-scrollbar {
   transform: translateY(-50%); /* Rotate chevron on collapse */
 }
 
+#chat-popout-btn {
+  position: fixed;
+  right: 0;
+  top: 42px;
+  scale: .75;
+  transition: transform 0.3s ease-in-out; /* Add transition for chevron rotation */
+  cursor: pointer;
+}
+
+#chat-popout-btn.popout {
+  transform: rotate(180deg); /* Rotate chevron on collapse */
+}
+
 body {
   background-color: #131313;
   color: #dcdcdc;
