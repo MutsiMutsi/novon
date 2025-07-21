@@ -10,7 +10,7 @@ select option{
 
 .panel {
   width: 320px;
-  display: inline-block;
+  display: inline-grid;
   margin-left: 16px;
   text-align: left;
 }

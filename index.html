@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="./css/normalize.css">
   <link rel="stylesheet" href="./css/skeleton.css">
   <link rel="stylesheet" href="./css/streaming.css">
+  <link rel="stylesheet" href="./css/rewards.css">
 
   <!-- Favicon
 –––––––––––––––––––––––––––––––––––––––––––––––––– -->
@@ -48,23 +49,33 @@
 <body style="min-width: 100vw; min-height: 100vh;max-width: 100vw; max-height: 100vh">
 
   <script src="./lib/mux.min.js"></script>
-  <script src="./lib/nkn.js"></script>
+  <script src="./lib/nkn.min.js"></script>
   <script src="./lib/video.min.js"></script>
   <script src="./lib/zxcvbn.min.js"></script>
   <script src="./lib/purify.min.js"></script>
   <script src="./lib/marked.umd.min.js"></script>
 
+  <script src="./js/adaptivequality.js"></script>
   <script src="./js/app.js"></script>
   <script src="./js/wallet-manager.js"></script>
+  <script src="./js/rewards.js"></script>
 
   <div class="navbar-spacer"></div>
   <nav class="navbar">
     <div class="container">
       <ul class="navbar-list">
-
         <li class="navbar-item"><img class="navbar-link" src="./images/favicon.svg" style="margin-top: 7px; width: 25px;"></li>
         <li class="navbar-item"><a id="dashboardButton" class="navbar-link">Dashboard</a></li>
         <li class="navbar-item"><a href="https://github.com/MutsiMutsi/go-novon/" target="_blank" class="navbar-link">How to stream</a></li>
+        <li class="navbar-item reward-banner" style="float: right;">
+          <a href="https://x.com/NKN_ORG/status/1926666416146591950" style="line-height: 32px !important;" target="_blank" class="navbar-link">
+            <div class="reward-banner-fill"></div>
+            <span style="color: #222 !important;">SEASON 2 POINTS:</span>
+            <span style="color: #333 !important; float:right" id="SeasonTwoPoints">
+              <bold>LOADING...</bold>
+            </span>
+          </a>
+        </li>
       </ul>
     </div>
   </nav>
@@ -101,7 +112,7 @@
 
       <div class="donate-popup">
         <div style="padding: 1rem;">
-          <h6 style="text-align: center;">donate nkn | <a id="depositButton">deposit nkn</a><br>
+          <h6 style="text-align: center;">donate nkn | <a id="depositButton" style="color: #ffd05b;">deposit nkn</a><br>
             <span id="feeWarningText" style="font-size:12px">a 0.1 nkn network transaction fee is incurred for fast confirmation and fair-use of the nkn network node operators.</span>
             <span id="showWalletAddress" style="font-size:12px; display: none;"></span>
           </h6>
@@ -267,7 +278,7 @@
         downloadAnchorNode.remove();
 
         const wallet = WalletManager.OpenExisting(document.getElementById("joinPasswordInput").value);
-        new StreamApp(wallet);
+        new streamApp.initApp(wallet);
       }
     };
 

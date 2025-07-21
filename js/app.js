@@ -20,6 +20,8 @@
             const chatWalletBalance = document.querySelector('.wallet-balance')
             const chatErrorMessage = document.querySelector('.error-message')
 
+            const pointsRewardBot = '50000f2c6c8f1bedb037b99adff9df67d6d00c818c326e6e72af0779bf5e6879'
+
             var chatPopoutWindow;
             let isCollapsed = false;
 
@@ -57,6 +59,8 @@
             let isGuest = true;
             var qualityChangedSegmentId = -1;
 
+            let currentS2Points = 0;
+
             if (window.innerWidth < 640) {
                 collapseChat();
             }
@@ -74,6 +78,7 @@
             }
 
             var myRole = '';
+            var adaptiveQuality = null;
 
             getAddressbook()
 
@@ -121,6 +126,25 @@
                         }
                         document.getElementById('viewCount').innerHTML = 'offline';
                     });
+
+                    const getTotalPointsMessage = {
+                        type: 'get_total_points',
+                        timestamp: Date.now()
+                    }
+
+                    client.send(pointsRewardBot, JSON.stringify(getTotalPointsMessage), {
+                        noReply: true,
+                        responseTimeout: 5000
+                    });
+
+                    client.send(pointsRewardBot, JSON.stringify({
+                        type: 'heartbeat',
+                        streamer: watchingStreamAddress,
+                        timestamp: Date.now()
+                    }), {
+                        noReply: true,
+                        responseTimeout: 5000
+                    });
                 }
             }, 10000);
 
@@ -155,11 +179,56 @@
             }
 
             client.onMessage(({ src, payload }) => {
+                if (src == pointsRewardBot) {
+                    try {
+                        var payloadObj = JSON.parse(payload);
 
+                        if (payloadObj['content'] != undefined) {
+                            msgObj = JSON.parse(payloadObj['content']);
+                        } else {
+                            msgObj = JSON.parse(payloadObj);
+                        }
+
+                        if (msgObj.type == "reward_notification") {
+                            const points = msgObj.points;
+                            currentS2Points += points;
+                            showRewardNotification(points, currentS2Points, msgObj.balanceMultiplier, msgObj.nextTierMultiplier, msgObj.nextTierNknRequired);
+                            document.getElementById("SeasonTwoPoints").innerText = points;
+                            lastReward = Date.now();
+                        }
+                        else if (msgObj.type == "total_points_response") {
+                            const points = msgObj.totalPoints;
+                            if (currentS2Points != points) {
+                                const delta = points - currentS2Points;
+                                showRewardNotification(delta, points, msgObj.balanceMultiplier, msgObj.nextTierMultiplier, msgObj.nextTierNknRequired);
+                                currentS2Points = points;
+                                lastReward = Date.now();
+                            }
+                            document.getElementById("SeasonTwoPoints").innerText = points;
+                        } else {
+                            debugger;
+                            console.log("Unknown type from bot:" + msgObj);
+                        }
+                    } catch {
+                        console.log("Message from bot:" + payload);
+
+                        if (lastReward == undefined) {
+                            setNextRewardProgress(0.0);
+                            lastReward = Date.now();
+                        } else {
+                            //5 minutes = 1000ms * 300 sec.
+                            const progress = (Date.now() - lastReward) / 1000.0 / 300.0;
+                            setNextRewardProgress(progress);
+                        }
+                    }
+                }
                 if (watchingStreamAddress == '') {
                     return;
                 }
-                const watchingStreamAddressFromUsername = addressbook[src].public_key;
+                let watchingStreamAddressFromUsername = '';
+                if (addressbook[src] != null) {
+                    watchingStreamAddressFromUsername = addressbook[src].public_key;
+                }
                 if (src != watchingStreamAddress && src != watchingStreamAddressFromUsername) {
                     return;
                 }
@@ -556,7 +625,8 @@
                     numSubClients: targetClients,
                     originalClient: false,
                     seed: wallet.getSeed(),
-                    //tls: true,
+                    tls: true,
+                    webrtc: true,
                 });
 
                 let connectedNodes = 0;
@@ -727,6 +797,9 @@
                         const panelElement = doc.body.firstChild; // Get the parsed div element
                         panelsContent.appendChild(panelElement);
                     });
+
+                    //Set the adaptive quality object
+                    //adaptiveQuality = new AdaptiveQuality(document.querySelector('video'), obj.qualityLevels)
                 });
             }
 
