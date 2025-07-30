@@ -49,6 +49,7 @@
 <body style="min-width: 100vw; min-height: 100vh;max-width: 100vw; max-height: 100vh">
 
   <script src="./lib/mux.min.js"></script>
+  <!--TODO: CHANGE BACK TO NIMINIFIED!!-->
   <script src="./lib/nkn.min.js"></script>
   <script src="./lib/video.min.js"></script>
   <script src="./lib/zxcvbn.min.js"></script>
@@ -59,14 +60,20 @@
   <script src="./js/app.js"></script>
   <script src="./js/wallet-manager.js"></script>
   <script src="./js/rewards.js"></script>
+  <script src="./js/novio-sdk.js"></script>
 
   <div class="navbar-spacer"></div>
   <nav class="navbar">
-    <div class="container">
+    <div class="container" style="margin-left: 8px;width: 100vw;padding-right: 16px;">
       <ul class="navbar-list">
         <li class="navbar-item"><img class="navbar-link" src="./images/favicon.svg" style="margin-top: 7px; width: 25px;"></li>
         <li class="navbar-item"><a id="dashboardButton" class="navbar-link">Dashboard</a></li>
         <li class="navbar-item"><a href="https://github.com/MutsiMutsi/go-novon/" target="_blank" class="navbar-link">How to stream</a></li>
+
+        <li class="navbar-item" style="float: right;">
+          <novio-connect theme="default" size="small" auto-connect="true" style="position: relative; top: 2px;right: 0px;"></novio-connect>
+        </li>
+
         <li class="navbar-item reward-banner" style="float: right;">
           <a href="https://x.com/NKN_ORG/status/1926666416146591950" style="line-height: 32px !important;" target="_blank" class="navbar-link">
             <div class="reward-banner-fill"></div>
@@ -158,11 +165,19 @@
       <span id="subclients-connected">initiating...</span>
     </div>
 
-    <div class="popup" id="login-popup">
+    <div class="popup" id="login-popup" style="width: 256px;">
       <div id="newUserLogin">
         <h6>Welcome to novon!</h6>
-        <button id="guestButton">Guest</button>
-        <button id="joinButton">Join</button>
+
+        <div class="container">
+          <div class="row">
+          </div>
+
+          <br>
+          <div class="row">
+            <button id="guestButton">Guest</button>
+          </div>
+        </div>
       </div>
       <div id="joinUserLogin" style="display: none;">
         <h6>Give us a strong password!</h6>
@@ -186,6 +201,8 @@
   </div>
 
   <script>
+
+    const app = streamApp;
 
     window.mobileAndTabletCheck = function () {
       let check = false;
@@ -225,7 +242,7 @@
       document.getElementById("authButton").onclick = () => {
         try {
           const wallet = WalletManager.OpenExisting(document.getElementById("walletPasswordInput").value);
-          new streamApp.initApp(wallet);
+          app.initApp(wallet);
         } catch (er) {
           alert(er.message)
         }
@@ -235,13 +252,26 @@
     }
 
     document.getElementById("guestButton").onclick = () => {
-      new streamApp.initApp(null);
+      app.initApp(null);
     };
     document.getElementById("proceedAsGuestButton").onclick = () => {
-      new streamApp.initApp(null);
+      app.initApp(null);
     };
 
-    document.getElementById("joinButton").onclick = () => {
+    const novioClient = new NovioClient();
+    novioClient.SignedIn.then(() => {
+      app.startWithNovio(novioClient);
+    }).catch((error) => {
+      console.error('Authentication failed:', error);
+    });
+
+    /*document.getElementById("novioButton").onclick = async () => {
+      app.startWithNovio().then(() => {
+        console.log("STARTED WITH NOVIO");
+      });
+    };*/
+
+    /*document.getElementById("joinButton").onclick = () => {
 
       document.getElementById("newUserLogin").style.display = "none";
       document.getElementById("joinUserLogin").style.display = "block";
@@ -278,10 +308,9 @@
         downloadAnchorNode.remove();
 
         const wallet = WalletManager.OpenExisting(document.getElementById("joinPasswordInput").value);
-        new streamApp.initApp(wallet);
+        app.initApp(wallet);
       }
-    };
-
+    };*/
   </script>
 
 </body>

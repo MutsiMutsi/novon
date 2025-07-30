@@ -1,6 +1,8 @@
 (function (exports) {
+    const numSubClients = 3;
+
     class StreamApp {
-        async startApp(startupWallet) {
+        async startApp(startupWallet, novioClient) {
             document.getElementById("login-popup").style.display = "none";
             document.getElementById("connection-indicator").style.display = 'block';
 
@@ -28,7 +30,6 @@
             const appendSemaphore = new Semaphore(1);
 
             var client = null;
-            const numSubClients = 3;
             var firstChunk = true;
             var watchingStreamAddress = '';
 
@@ -69,12 +70,18 @@
                 chatPopoutBtn.style.display = 'none';
             }
 
-            var wallet = null;
-            if (startupWallet != null) {
-                wallet = startupWallet;
-                isGuest = false;
-            } else {
+            if (novioClient != undefined) {
+                //TODO: FIGURE OUT WHAT WALLET IS USED FOR AND IF NOVIO SUPPORTS THOSE FUNCS.
+                //UHM NO WALLET!??
                 wallet = new nkn.Wallet({});
+            } else {
+                var wallet = null;
+                if (startupWallet != null) {
+                    wallet = startupWallet;
+                    isGuest = false;
+                } else {
+                    wallet = new nkn.Wallet({});
+                }
             }
 
             var myRole = '';
@@ -102,7 +109,12 @@
                 qualityChangedSegmentId = replySegmentId;
             }
 
-            client = await setupClient(numSubClients);
+            if (novioClient == undefined) {
+                const nknClient = new NknClient(wallet);
+                client = await nknClient.Setup();
+            } else {
+                client = novioClient;
+            }
 
             document.getElementById('connection-indicator').style.display = 'none';
             document.getElementById('blackoutPanel').style.display = 'none';
@@ -193,7 +205,7 @@
                             const points = msgObj.points;
                             currentS2Points += points;
                             showRewardNotification(points, currentS2Points, msgObj.balanceMultiplier, msgObj.nextTierMultiplier, msgObj.nextTierNknRequired);
-                            document.getElementById("SeasonTwoPoints").innerText = points;
+                            document.getElementById("SeasonTwoPoints").innerText = currentS2Points;
                             lastReward = Date.now();
                         }
                         else if (msgObj.type == "total_points_response") {
@@ -210,8 +222,6 @@
                             console.log("Unknown type from bot:" + msgObj);
                         }
                     } catch {
-                        console.log("Message from bot:" + payload);
-
                         if (lastReward == undefined) {
                             setNextRewardProgress(0.0);
                             lastReward = Date.now();
@@ -232,7 +242,10 @@
                 if (src != watchingStreamAddress && src != watchingStreamAddressFromUsername) {
                     return;
                 }
-                if (payload instanceof Uint8Array) {
+                if (typeof payload == 'object' || payload instanceof Uint8Array) {
+
+                    //If its an object we parse it to Uint8Array this is because chrome runtime messaging serialized the msg.
+                    payload = new Uint8Array(Object.values(payload));
 
                     if (isChatMessage(payload)) {
                         const chatMsg = uint8ArrayToJsonString(payload)
@@ -350,8 +363,6 @@
                         let data = new Uint8Array(segment.initSegment.byteLength + segment.data.byteLength);
                         data.set(segment.initSegment, 0);
                         data.set(segment.data, segment.initSegment.byteLength);
-                        console.log(muxjs.mp4.tools.inspect(data));
-
                         while (sourceBuffer.updating) {
                             await new Promise(r => setTimeout(r, 1));
                         }
@@ -617,46 +628,6 @@
                     // Handle potential parsing errors
                     console.error("Error parsing JSON string:", error);
                     return null;
-                }
-            }
-
-            async function setupClient(targetClients) {
-                let client = new nkn.MultiClient({
-                    numSubClients: targetClients,
-                    originalClient: false,
-                    seed: wallet.getSeed(),
-                    tls: true,
-                    webrtc: true,
-                });
-
-                let connectedNodes = 0;
-                let failedNodes = 0;
-
-                for (const [key, value] of Object.entries(client.clients)) {
-                    value.eventListeners.connect.push(() => {
-                        connectedNodes++;
-                        let baseText = `${connectedNodes}/${numSubClients} nodes`;
-                        let warningText = '\ntrying to find more nodes...'
-                        document.getElementById('subclients-connected').textContent = baseText + (connectedNodes < numSubClients ? warningText : '');
-                    });
-
-                    value.eventListeners.connectFailed.push(() => {
-                        console.warn(key, 'failed');
-                        failedNodes++;
-                        let baseText = `${connectedNodes}/${numSubClients} nodes`;
-                        let warningText = '\ntrying to find more nodes...'
-                        document.getElementById('subclients-connected').textContent = baseText + (connectedNodes < numSubClients ? warningText : '');
-                    });
-                }
-
-                while (connectedNodes + failedNodes < targetClients && connectedNodes < numSubClients) {
-                    await new Promise(r => setTimeout(r, 50));
-                }
-
-                if (connectedNodes > 0) {
-                    return client;
-                } else {
-                    alert("No nodes found to connect, if the issue persists try joining as guest and please report. \n\n(for firefox users: Settings-> Privacy & Security -> Disabled check for block dangerous and deceptive content. Sadly Firefox has marked NKN nodes as dangerous...)")
                 }
             }
 
@@ -1026,8 +997,62 @@
         }
     }
     // Only expose what's necessary (e.g., initialization function)
-    exports.initApp = function (startupWallet) {
+    exports.initApp = function (startupWallet, novioSignOn) {
         const app = new StreamApp();
-        app.startApp(startupWallet);
+        app.startApp(startupWallet, novioSignOn);
     };
+
+    exports.startWithNovio = async function (client) {
+        const app = new StreamApp();
+        app.startApp(null, client);
+    }
+
+    class NknClient {
+        client;
+        wallet;
+
+        constructor(wallet) {
+            this.wallet = wallet;
+        }
+
+        async Setup() {
+            this.client = new nkn.MultiClient({
+                numSubClients: numSubClients,
+                originalClient: false,
+                seed: this.wallet.getSeed(),
+                tls: true,
+                webrtc: true,
+            });
+
+            let connectedNodes = 0;
+            let failedNodes = 0;
+
+            for (const [key, value] of Object.entries(this.client.clients)) {
+                value.eventListeners.connect.push(() => {
+                    connectedNodes++;
+                    let baseText = `${connectedNodes}/${numSubClients} nodes`;
+                    let warningText = '\ntrying to find more nodes...'
+                    document.getElementById('subclients-connected').textContent = baseText + (connectedNodes < numSubClients ? warningText : '');
+                });
+
+                value.eventListeners.connectFailed.push(() => {
+                    console.warn(key, 'failed');
+                    failedNodes++;
+                    let baseText = `${connectedNodes}/${numSubClients} nodes`;
+                    let warningText = '\ntrying to find more nodes...'
+                    document.getElementById('subclients-connected').textContent = baseText + (connectedNodes < numSubClients ? warningText : '');
+                });
+            }
+
+            while (connectedNodes + failedNodes < numSubClients && connectedNodes < numSubClients) {
+                await new Promise(r => setTimeout(r, 50));
+            }
+
+            if (connectedNodes > 0) {
+                return this.client;
+            } else {
+                alert("No nodes found to connect, if the issue persists try joining as guest and please report. \n\n(for firefox users: Settings-> Privacy & Security -> Disabled check for block dangerous and deceptive content. Sadly Firefox has marked NKN nodes as dangerous...)")
+            }
+        }
+    }
 })(window.streamApp = window.streamApp || {}); // Namespace for optional isolation
