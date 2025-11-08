@@ -1,8 +1,17 @@
 (function (exports) {
-    const numSubClients = 3;
+    const numSubClients = 4;
+    let targetBufferSeconds = 7.5; // Start with 7.5 seconds behind live
+    let consecutiveStalls = 0;
+    const MIN_BUFFER = 5;
+    const MAX_BUFFER = 10;
 
     class StreamApp {
         async startApp(startupWallet, novioClient) {
+
+
+            // Initialize the debugger
+            const streamDebugger = new LivestreamDebugger();
+
             document.getElementById("login-popup").style.display = "none";
             document.getElementById("connection-indicator").style.display = 'block';
 
@@ -165,6 +174,15 @@
                 getStreamers()
             }, 30000);
 
+
+            // Poll buffer status regularly:
+            setInterval(() => {
+                if (sourceBuffer && video) {
+                    streamDebugger.updateTargetBuffer(targetBufferSeconds);
+                    streamDebugger.updateBufferMetrics(video, sourceBuffer);
+                }
+            }, 500);
+
             //Singe page logic
             const currentPath = window.location.pathname.substring(1);
             if (currentPath.length > 0) {
@@ -312,21 +330,40 @@
             async function appendFirstSegment(chunk) {
                 await appendSemaphore.acquire()
                 try {
+                    streamDebugger.onSegmentReceived(chunk.byteLength);
+
                     let mediaSource = new MediaSource();
                     transmuxer = new muxjs.mp4.Transmuxer();
 
                     video = document.querySelector('video');
+
                     video.src = URL.createObjectURL(mediaSource);
                     videojs('streamPlayer').controlBar.progressControl.hide();
 
-
-                    videojs('streamPlayer').on(['waiting', 'pause'], function () {
+                    videojs('streamPlayer').on(['waiting', 'pause'], () => {
                         isPlaying = false;
+                        streamDebugger.onPlaybackStateChange(false);
                     });
-
                     videojs('streamPlayer').on('playing', function () {
+                        streamDebugger.onPlaybackStateChange(true);
                         isPlaying = true;
                         segmentsBehind = 0;
+
+                        // Speed up slightly if behind
+                        const bufferAhead = sourceBuffer.buffered.length > 0
+                            ? sourceBuffer.buffered.end(sourceBuffer.buffered.length - 1) - video.currentTime
+                            : 0;
+
+                        if (bufferAhead < 3) {
+                            video.playbackRate = 1.0; // Normal when low buffer
+                        } else if (bufferAhead > 8) {
+                            video.playbackRate = 1.05; // Slightly faster to catch up
+                        }
+
+                        // If you adjust playback rate:
+                        if (video.playbackRate !== 1.0) {
+                            streamDebugger.onPlaybackRateChange(video.playbackRate);
+                        }
                     });
 
                     const waitForOpen = new Promise((resolve) => {
@@ -339,26 +376,70 @@
 
                     sourceBuffer = mediaSource.addSourceBuffer(mime);
                     sourceBuffer.addEventListener('updateend', async () => {
+
+                        streamDebugger.updateBufferMetrics(video, sourceBuffer);
+                        streamDebugger.updateSourceBufferState(false);
+
                         if (!isPlaying) {
-                            if (!isPlaying && segmentsBehind > 3) {
-                                videojs.players.streamPlayer.liveTracker.seekToLiveEdge()
-                                segmentsBehind = 0;
+                            consecutiveStalls++;
+
+                            // Increase buffer target when stalling frequently
+                            if (consecutiveStalls > 2) {
+                                targetBufferSeconds = Math.min(targetBufferSeconds + 1, MAX_BUFFER);
+                                consecutiveStalls = 0;
                             }
+
+                            // Only seek if we're VERY far behind AND have enough buffer ahead
+                            const currentTime = video.currentTime;
+                            const bufferedEnd = sourceBuffer.buffered.length > 0
+                                ? sourceBuffer.buffered.end(sourceBuffer.buffered.length - 1)
+                                : 0;
+                            const bufferAhead = bufferedEnd - currentTime;
+
+                            if (segmentsBehind > 5 && bufferAhead > targetBufferSeconds) {
+                                // Seek to a point that maintains our target buffer
+                                video.currentTime = bufferedEnd - targetBufferSeconds;
+                                alert('SEEK AHEAD');
+                                segmentsBehind = 0;
+                                consecutiveStalls = 0;
+                            }
+
                             segmentsBehind++;
+                        } else {
+                            // Playing smoothly - gradually reduce buffer target
+                            if (consecutiveStalls > 0) consecutiveStalls--;
+                            if (targetBufferSeconds > MIN_BUFFER) {
+                                targetBufferSeconds = Math.max(targetBufferSeconds - 0.1, MIN_BUFFER);
+                            }
                         }
 
-                        //Clean up sourcebuffer when it grows beyond 20s to 10s
+                        // Buffer cleanup
                         for (let i = 0; i < sourceBuffer.buffered.length; i++) {
-                            const bufferLength = sourceBuffer.buffered.end(i) - sourceBuffer.buffered.start(i);
-                            if (bufferLength > 20) {
-                                //console.log(`clearing out ${sourceBuffer.buffered.end(i) - 10 - sourceBuffer.buffered.start(i)} seconds from sb`)
-                                sourceBuffer.remove(sourceBuffer.buffered.start(i), sourceBuffer.buffered.end(i) - 10)
-                                while (sourceBuffer.updating) {
-                                    await new Promise(r => setTimeout(r, 1));
+                            const bufferStart = sourceBuffer.buffered.start(i);
+                            const bufferEnd = sourceBuffer.buffered.end(i);
+                            const bufferLength = bufferEnd - bufferStart;
+
+                            if (bufferLength > 60) {
+                                const safeRemoveEnd = Math.min(
+                                    bufferEnd - 30,
+                                    video.currentTime - 5  // Never remove within 5s of playback
+                                );
+
+                                // Only remove if there's actually something safe to remove
+                                if (safeRemoveEnd > bufferStart) {
+                                    sourceBuffer.remove(bufferStart, safeRemoveEnd);
+                                    while (sourceBuffer.updating) {
+                                        await new Promise(r => setTimeout(r, 1));
+                                    }
                                 }
                             }
                         }
                     });
+
+                    sourceBuffer.addEventListener('update', () => {
+                        streamDebugger.updateSourceBufferState(true);
+                    });
+
                     transmuxer.on('data', async (segment) => {
                         let data = new Uint8Array(segment.initSegment.byteLength + segment.data.byteLength);
                         data.set(segment.initSegment, 0);
@@ -381,11 +462,18 @@
             function appendNextSegment(chunk) {
                 transmuxer.on('data', async (segment) => {
                     await appendSemaphore.acquire()
+
+                    streamDebugger.onSegmentReceived(chunk.byteLength);
+                    const appendStart = performance.now();
                     try {
                         while (sourceBuffer.updating) {
                             await new Promise(r => setTimeout(r, 1));
                         }
                         sourceBuffer.appendBuffer(new Uint8Array(segment.data));
+
+                        const appendDuration = performance.now() - appendStart;
+                        streamDebugger.onSegmentAppended(appendDuration);
+
                         transmuxer.off('data');
                     }
                     finally {
