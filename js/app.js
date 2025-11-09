@@ -1,5 +1,5 @@
 (function (exports) {
-    const numSubClients = 3;
+    const numSubClients = 4;
     let targetBufferSeconds = 12; // Start with 7.5 seconds behind live
     let consecutiveStalls = 0;
     let consecutiveOutOfOrderSegmentReceived = 0;
@@ -25,7 +25,6 @@
 
             const chatProgressLine = document.querySelector('.progress-line')
             const chatDonateButton = document.querySelector('.donate-button')
-            const chatDepositButton = document.getElementById("depositButton")
             const chatDonatePopup = document.querySelector('.donate-popup')
             const chatDonateAmount = document.querySelector('.donate-amount')
             const chatWalletBalance = document.querySelector('.wallet-balance')
@@ -581,72 +580,57 @@
 
 
             function addMessage(chatMsg) {
-                var username = chatMsg.src;
-                var message = chatMsg.text;
+                let username = chatMsg.src;
+                let message = chatMsg.text;
 
-                //impersonate owner
-                if (chatMsg.role == 'owner') {
-                    username = watchingStreamAddress
-                }
+                if (chatMsg.role === 'owner') username = watchingStreamAddress;
+                if (addressbook[username]) username = addressbook[username].name;
+                else if (username.length === 64) username = username.substring(0, 6);
+                if (chatMsg.role === 'owner') username = `🎥 ${username}`;
 
-                var color = getUserColor(username);
-                if (username == 'ERROR') {
-                    color = "#FF0000"
-                }
+                const color = getUserColor(username);
 
-                //If username is registerd use the username
-                if (addressbook[username] != null) {
-                    username = addressbook[username].name;
-                } else if (username.length == 64) { //otherwise take the shortened hex address
-                    username = username.substring(0, 6)
-                }
-
-                if (chatMsg.role == 'owner') {
-                    username = `🎥 ` + username;
-                }
-
-                const donateMatches = [...message.matchAll(donationRegex)];
-                donateMatches.forEach(match => {
-                    const amount = parseInt(match[0].replace('donate', ''));
-                    if (amount != 0) {
-                        message = message.replace(match[0], `
-            <span style="color: #0fa0ce; padding: 2px 2px 2px 2px; background-color: #ffffff0f; border-radius: 5px;">
-              <svg style="scale: 0.7;position: relative;top: 7; margin-top: -10px;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-              </svg>${amount} NKN
-            </span>`)
-                    }
-
-                });
-
-                var deleteButton = '<a class="msg-delete-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></a>';
-                if (myRole != 'owner') {
-                    deleteButton = '';
-                }
+                const deleteButton = myRole === 'owner'
+                    ? `<a class="msg-delete-btn">...</a>` : '';
 
                 const msgElement = document.createElement('div');
                 msgElement.classList.add('message');
-                msgElement.setAttribute('data-message-id', chatMsg.id);
+                msgElement.dataset.messageId = chatMsg.id;
                 msgElement.innerHTML = DOMPurify.sanitize(`
-            <span>
-                <span class="username" style="color: ${color}">${username}
-                </span>: 
-                <span class="chat-text"></span>
-                ${deleteButton}
-            </span>`);
+        <span>
+            <span class="username" style="color:${color}">${username}</span>:
+            <span class="chat-text"></span>
+            ${deleteButton}
+        </span>
+    `);
 
-                if (myRole == 'owner') {
-                    msgElement.querySelector('.msg-delete-btn').onclick = () => {
-                        sendDeleteMessageRequest(chatMsg.id);
-                    };
-                }
+                const chatText = msgElement.querySelector('.chat-text');
 
-                //set the message, sanitized.
-                msgElement.querySelector('.chat-text').textContent = DOMPurify.sanitize(message)
+                // --- STEP 1: Escape user input to safe HTML text ---
+                const escaped = document.createTextNode(message);
+                chatText.appendChild(escaped);
+
+                // --- STEP 2: Apply donation highlighting (trusted markup) ---
+                // We now modify the DOM safely rather than raw HTML string replace
+                const donationRegex = /donate(\d+)/gi;
+                let html = chatText.innerHTML;
+                html = html.replace(donationRegex, (m, amount) => {
+                    amount = parseInt(amount);
+                    if (!amount) return m;
+                    return `
+            <span style="color:#ffd05b;padding:2px;background-color:#ffffff0f;border-radius:5px;">
+              ${amount} NKN
+            </span>`;
+                });
+
+                // sanitize again after injecting trusted markup
+                chatText.innerHTML = DOMPurify.sanitize(html, {
+                    ALLOWED_TAGS: ['span', 'svg', 'path'], // only allow your donation markup
+                    ALLOWED_ATTR: ['style', 'xmlns', 'width', 'height', 'viewBox',
+                        'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']
+                });
 
                 messagesBox.appendChild(msgElement);
-
-                // Scroll to bottom after adding new message
                 messagesBox.scrollTop = Number.MAX_SAFE_INTEGER;
             }
 
@@ -784,7 +768,7 @@
             }
 
             async function getStreamers() {
-                const result = await client.getSubscribers('novon', { txPool: true, meta: true });
+                const result = await nkn.Wallet.getSubscribers('novon', { txPool: true, meta: true });
                 const streamers = { ...result.subscribers, ...result.subscribersInTxPool };
 
                 //streamPreviewContainer.innerHTML = '';
@@ -963,7 +947,7 @@
                         const walletAddress = nkn.Wallet.publicKeyToAddress(watchingStreamAddress);
 
                         try {
-                            hash = await wallet.transferTo(walletAddress, messageDonationTotal, { fee: 0.1, attrs: donationId });
+                            hash = await client.transferTo(walletAddress, messageDonationTotal, donationId);
                             console.log(hash);
                             chatDonatePopup.classList.remove('show');
                         } catch (err) {
@@ -990,17 +974,15 @@
                         content: { text: text }
                     }
                     if (hash != null) {
-                        chatMsg.content.hash = hash;
+                        chatMsg.content.hash = hash.data;
                     }
 
                     const reply = await client.send(watchingStreamAddress, JSON.stringify(chatMsg), { noReply: hash == null, responseTimeout: 60000 });
                     if (reply) {
-                        const replyString = new TextDecoder().decode(reply);
+                        const replyString = String.fromCharCode(...Object.values(reply));
                         if (replyString != "success") {
-
                             var username = chatMsg.src;
                             var message = chatMsg.text;
-
                             var errorMsg = {
                                 src: "ERROR",
                                 text: replyString.replace('error: ', '')
@@ -1082,7 +1064,7 @@
                 }
 
                 chatDonatePopup.classList.add('show');
-                walletBalance = await wallet.getBalance();
+                walletBalance = await nkn.Wallet.getBalance(novio.address);
                 chatWalletBalance.textContent = walletBalance;
 
                 if (walletBalance - txFee < messageDonationTotal) {
@@ -1136,16 +1118,6 @@
                 //remove button
                 message.children[0].removeChild(message.querySelector('a'));
             }
-
-            chatDepositButton.onclick = () => {
-                if (!isGuest) {
-                    chatbox.querySelector("#showWalletAddress").textContent = wallet.address;
-                    chatbox.querySelector("#feeWarningText").textContent = "Deposit NKN to this address:"
-                    chatbox.querySelector("#showWalletAddress").style.display = 'inline-block';
-                } else {
-                    chatbox.querySelector("#feeWarningText").textContent = "Please join novon - any funds send to a guest account will be lost."
-                }
-            }
         }
     }
     // Only expose what's necessary (e.g., initialization function)
@@ -1196,7 +1168,7 @@
                 });
             }
 
-            while (connectedNodes + failedNodes < numSubClients && connectedNodes < numSubClients) {
+            while (connectedNodes + failedNodes < numSubClients - 1 && connectedNodes < numSubClients - 1) {
                 await new Promise(r => setTimeout(r, 50));
             }
 

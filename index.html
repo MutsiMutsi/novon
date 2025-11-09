@@ -75,7 +75,7 @@
           <novio-connect theme="default" size="small" auto-connect="true" style="position: relative; top: 2px;right: 0px;"></novio-connect>
         </li>
 
-        <li class="navbar-item reward-banner" style="float: right;">
+        <li class="navbar-item reward-banner" style="float: right; display: none;">
           <a href="https://x.com/NKN_ORG/status/1926666416146591950" style="line-height: 32px !important;" target="_blank" class="navbar-link">
             <div class="reward-banner-fill"></div>
             <span style="color: #222 !important;">SEASON 2 POINTS:</span>
@@ -120,7 +120,7 @@
 
       <div class="donate-popup">
         <div style="padding: 1rem;">
-          <h6 style="text-align: center;">donate nkn | <a id="depositButton" style="color: #ffd05b;">deposit nkn</a><br>
+          <h6 style="text-align: center;">donate nkn<br>
             <span id="feeWarningText" style="font-size:12px">a 0.1 nkn network transaction fee is incurred for fast confirmation and fair-use of the nkn network node operators.</span>
             <span id="showWalletAddress" style="font-size:12px; display: none;"></span>
           </h6>
@@ -274,6 +274,7 @@ ease;
     //}
 
     document.getElementById("guestButton").onclick = () => {
+      document.querySelector('novio-connect').style.display = 'none';
       app.initApp(null);
     };
 
@@ -282,11 +283,13 @@ ease;
     }
 
     document.getElementById("proceedAsGuestButton").onclick = () => {
+      document.querySelector('novio-connect').style.display = 'none';
       app.initApp(null);
     };
 
     const novioClient = new NovioClient();
     novioClient.SignedIn.then(() => {
+      document.getElementsByClassName('reward-banner')[0].style.display = 'block';
       app.startWithNovio(novioClient);
     }).catch((error) => {
       console.error('Authentication failed:', error);
