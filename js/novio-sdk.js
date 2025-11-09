@@ -165,7 +165,6 @@ class NovioClient {
             // Ping events can be handled here if needed
             // For now, just a placeholder for future functionality
             // The extension pings to keep alive the background-foreground connection.
-            console.log('ping');
         });
     }
 

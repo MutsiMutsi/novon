@@ -169,14 +169,35 @@
     <div class="popup" id="login-popup" style="width: 256px;">
       <div id="newUserLogin">
         <h6>Welcome to novon!</h6>
-
+        <span style="font-size: 13px;">To participate in season 2 sign in with novio:</span>
         <div class="container">
           <div class="row">
           </div>
 
           <br>
           <div class="row">
-            <button id="guestButton">Guest</button>
+            <button id="loginNovioAlt" style="
+    background: linear-gradient(135deg, #002b36 0%, #002b36 100%);
+    border-style: solid;
+    border-width: 1px;
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: 'Source Sans Pro', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s 
+ease;
+    position: relative;
+    overflow: hidden;
+    min-width: 140px;
+">Login With Novio</button>
+            <span style="font-size: 11px;">Or if you just want to try out the platform</span>
+            <a id="guestButton" style="text-decoration: underline;">sign in as guest</a>
           </div>
         </div>
       </div>
@@ -195,7 +216,7 @@
         <input class="u-full-width" type="password" placeholder="enter your password" id="walletPasswordInput">
         <button id="authButton">Authenticate</button>
         <br>
-        <a id="proceedAsGuestButton" style="font-size: 12px;">(or proceed as guest)</a>
+        <a id="proceedAsGuestButton" style="font-size: 12px; text-decoration: underline;">(or proceed as guest)</a>
       </div>
 
     </div>
@@ -238,23 +259,28 @@
       }
     }
 
-    if (WalletManager.IsExisting()) {
-      document.getElementById("newUserLogin").style.display = 'none';
-      document.getElementById("authButton").onclick = () => {
-        try {
-          const wallet = WalletManager.OpenExisting(document.getElementById("walletPasswordInput").value);
-          app.initApp(wallet);
-        } catch (er) {
-          alert(er.message)
-        }
-      }
-    } else {
-      document.getElementById("returningUserLogin").style.display = 'none';
-    }
+    // if (WalletManager.IsExisting()) {
+    //   document.getElementById("newUserLogin").style.display = 'none';
+    //   document.getElementById("authButton").onclick = () => {
+    //     try {
+    //       const wallet = WalletManager.OpenExisting(document.getElementById("walletPasswordInput").value);
+    //       app.initApp(wallet);
+    //     } catch (er) {
+    //       alert(er.message)
+    //     }
+    //   }
+    // } else {
+    document.getElementById("returningUserLogin").style.display = 'none';
+    //}
 
     document.getElementById("guestButton").onclick = () => {
       app.initApp(null);
     };
+
+    document.getElementById("loginNovioAlt").onclick = () => {
+      document.querySelector('novio-connect').shadowRoot.children[1].children[0].click()
+    }
+
     document.getElementById("proceedAsGuestButton").onclick = () => {
       app.initApp(null);
     };

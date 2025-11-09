@@ -1,14 +1,14 @@
 (function (exports) {
-    const numSubClients = 4;
-    let targetBufferSeconds = 7.5; // Start with 7.5 seconds behind live
+    const numSubClients = 3;
+    let targetBufferSeconds = 12; // Start with 7.5 seconds behind live
     let consecutiveStalls = 0;
-    const MIN_BUFFER = 5;
-    const MAX_BUFFER = 10;
+    let consecutiveOutOfOrderSegmentReceived = 0;
+    const MAX_OUT_OF_ORDER_BEFORE_SKIP = 10;
+    const MIN_BUFFER = 8;
+    const MAX_BUFFER = 16;
 
     class StreamApp {
         async startApp(startupWallet, novioClient) {
-
-
             // Initialize the debugger
             const streamDebugger = new LivestreamDebugger();
 
@@ -40,6 +40,8 @@
 
             var client = null;
             var firstChunk = true;
+            let nextSegmentId = 0;
+            const pendingSegments = new Map();
             var watchingStreamAddress = '';
 
             var video = null;
@@ -274,20 +276,83 @@
                     }
 
                     handleChunk(payload, (id, data) => {
-                        //console.log("segment complete id:", id, "length:", data.length)
                         if (firstChunk) {
                             appendFirstSegment(data);
+                            nextSegmentId = id + 1;
                             firstChunk = false;
 
-                            //Allow chatting
                             chatInput.setAttribute('contenteditable', true);
                             chatDonateButton.style.display = 'block';
                             chatInput.textContent = '';
 
-                        } else if (id == qualityChangedSegmentId) {
+                            console.log("FIRST SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
+                            return;
+                        }
+                        else if (id === qualityChangedSegmentId) {
                             appendFirstSegment(data);
-                        } else {
-                            appendNextSegment(data);
+                            nextSegmentId = id + 1;
+                            console.log("QUALITY SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
+                            return;
+                        }
+
+                        if (id < nextSegmentId) {
+                            console.log("DUPLICATE SEGMENT RECEIVED, IGNORE | EXPECTING: " + nextSegmentId);
+                            return;
+                        }
+
+                        if (id > nextSegmentId) {
+                            // Out of order — store for later
+                            pendingSegments.set(id, data);
+                            consecutiveOutOfOrderSegmentReceived++;
+
+                            console.log(`OUT OF ORDER SEGMENT ${id} RECEIVED | EXPECTING: ${nextSegmentId}`);
+
+                            // Too many consecutive out-of-order segments → skip ahead
+                            if (consecutiveOutOfOrderSegmentReceived >= MAX_OUT_OF_ORDER_BEFORE_SKIP) {
+                                console.warn(
+                                    `SKIPPING AHEAD after ${MAX_OUT_OF_ORDER_BEFORE_SKIP} misses | Was expecting ${nextSegmentId}, jumping to ${id}`
+                                );
+
+                                // Find the lowest available pending segment >= id
+                                const sortedIds = [...pendingSegments.keys()].sort((a, b) => a - b);
+                                const nextAvailableId = sortedIds.find(sid => sid >= id);
+                                if (nextAvailableId == null) {
+                                    console.warn("No pending segments to skip to — waiting for more data");
+                                    return;
+                                }
+
+                                const nextData = pendingSegments.get(nextAvailableId);
+                                pendingSegments.clear(); // reset pending
+                                appendFirstSegment(nextData); // restart playback chain
+                                nextSegmentId = nextAvailableId + 1;
+                                consecutiveOutOfOrderSegmentReceived = 0;
+                                console.log(`SKIP AHEAD SEGMENT ${nextAvailableId} APPENDED AS FIRST | EXPECTING: ${nextSegmentId}`);
+
+                                // Continue with any immediately following segments
+                                while (pendingSegments.has(nextSegmentId)) {
+                                    const nextData = pendingSegments.get(nextSegmentId);
+                                    pendingSegments.delete(nextSegmentId);
+                                    appendNextSegment(nextData);
+                                    nextSegmentId++;
+                                    console.log("PENDING SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
+                                }
+                            }
+                            return;
+                        }
+
+                        // id == nextSegmentId → append now
+                        appendNextSegment(data);
+                        nextSegmentId++;
+                        consecutiveOutOfOrderSegmentReceived = 0;
+                        console.log("SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
+
+                        // Flush any queued segments in order
+                        while (pendingSegments.has(nextSegmentId)) {
+                            const nextData = pendingSegments.get(nextSegmentId);
+                            pendingSegments.delete(nextSegmentId);
+                            appendNextSegment(nextData);
+                            nextSegmentId++;
+                            console.log("PENDING SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
                         }
                     });
                 } else {
@@ -399,7 +464,6 @@
                             if (segmentsBehind > 5 && bufferAhead > targetBufferSeconds) {
                                 // Seek to a point that maintains our target buffer
                                 video.currentTime = bufferedEnd - targetBufferSeconds;
-                                alert('SEEK AHEAD');
                                 segmentsBehind = 0;
                                 consecutiveStalls = 0;
                             }

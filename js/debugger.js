@@ -49,13 +49,12 @@ class LivestreamDebugger {
         overlay.id = 'debug-overlay';
         overlay.style.cssText = `
             position: fixed;
-            top: 10px;
-            right: 10px;
+            left: 10px;
+            bottom: 10px;
             background: rgba(0, 0, 0, 0.85);
             color: #00ff00;
             font-family: 'Courier New', monospace;
             font-size: 12px;
-            padding: 15px;
             border-radius: 5px;
             z-index: 10000;
             max-width: 400px;
@@ -65,11 +64,12 @@ class LivestreamDebugger {
         `;
 
         overlay.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #00ff00; padding-bottom: 5px;">
-                <strong style="font-size: 14px;">LIVESTREAM DEBUG</strong>
-                <button id="debug-toggle" style="background: #00ff00; color: black; border: none; padding: 2px 8px; cursor: pointer; border-radius: 3px; font-size: 10px;">HIDE</button>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <button id="debug-toggle" style="background: #3e3e3eff; color: black; border: none; padding: 2px 8px; cursor: pointer; border-radius: 3px; font-size: 10px;">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M480-120q-64 0-114.5-33T283-240l-95 54-40-69 103-60q-3-11-5-22.5t-4-22.5H120v-80h122q2-12 4-23.5t5-22.5l-103-60 40-69 94 55q8-14 18.5-27.5T322-612q-2-7-2-14v-14q0-24 7-46t19-41l-66-66 56-57 70 68q17-9 35.5-13.5T480-800q20 0 39 5t36 14l69-69 56 57-66 66q12 19 18.5 41t6.5 46v13.5q0 6.5-2 13.5 11 11 21.5 25t18.5 28l95-54 40 69-104 59q3 11 5.5 22.5T718-440h122v80H718q-2 12-4 23.5t-5 22.5l103 60-40 69-95-55q-32 54-82.5 87T480-120Zm-76-546q17-7 36.5-10.5T480-680q20 0 38.5 3t35.5 10q-8-23-28-38t-46-15q-26 0-47 15.5T404-666Zm76 466q73 0 116.5-61T640-400q0-70-40.5-135T480-600q-78 0-119 64.5T320-400q0 78 43.5 139T480-200Zm-40-80v-240h80v240h-80Z"/></svg>
+                </button>
             </div>
-            <div id="debug-content"></div>
+            <div id="debug-content" style="display:none;"></div>
         `;
 
         document.body.appendChild(overlay);
@@ -175,42 +175,47 @@ class LivestreamDebugger {
     // Methods to call from your code
 
     updateBufferMetrics(video, sourceBuffer) {
-        if (!sourceBuffer || !video) return;
 
-        const currentTime = video.currentTime;
-        this.metrics.currentTime = currentTime;
+        try {
+            if (!sourceBuffer || !video) return;
 
-        // Calculate buffer ahead and behind
-        let bufferAhead = 0;
-        let bufferBehind = 0;
-        let totalBuffered = 0;
-        const ranges = [];
+            const currentTime = video.currentTime;
+            this.metrics.currentTime = currentTime;
 
-        for (let i = 0; i < sourceBuffer.buffered.length; i++) {
-            const start = sourceBuffer.buffered.start(i);
-            const end = sourceBuffer.buffered.end(i);
-            ranges.push({ start, end });
-            totalBuffered += (end - start);
+            // Calculate buffer ahead and behind
+            let bufferAhead = 0;
+            let bufferBehind = 0;
+            let totalBuffered = 0;
+            const ranges = [];
 
-            if (currentTime >= start && currentTime <= end) {
-                bufferAhead = end - currentTime;
-                bufferBehind = currentTime - start;
+            for (let i = 0; i < sourceBuffer.buffered.length; i++) {
+                const start = sourceBuffer.buffered.start(i);
+                const end = sourceBuffer.buffered.end(i);
+                ranges.push({ start, end });
+                totalBuffered += (end - start);
+
+                if (currentTime >= start && currentTime <= end) {
+                    bufferAhead = end - currentTime;
+                    bufferBehind = currentTime - start;
+                }
             }
-        }
 
-        this.metrics.bufferAhead = bufferAhead;
-        this.metrics.bufferBehind = bufferBehind;
-        this.metrics.totalBuffered = totalBuffered;
-        this.metrics.bufferRanges = ranges;
+            this.metrics.bufferAhead = bufferAhead;
+            this.metrics.bufferBehind = bufferBehind;
+            this.metrics.totalBuffered = totalBuffered;
+            this.metrics.bufferRanges = ranges;
 
-        // Warning for low buffer
-        if (bufferAhead < 2 && this.metrics.isPlaying) {
-            this.addWarning(`Low buffer: ${bufferAhead.toFixed(2)}s`);
-        }
+            // Warning for low buffer
+            if (bufferAhead < 2 && this.metrics.isPlaying) {
+                this.addWarning(`Low buffer: ${bufferAhead.toFixed(2)}s`);
+            }
 
-        // Warning for fragmented buffer
-        if (ranges.length > 2) {
-            this.addWarning(`Buffer fragmented: ${ranges.length} ranges`);
+            // Warning for fragmented buffer
+            if (ranges.length > 2) {
+                this.addWarning(`Buffer fragmented: ${ranges.length} ranges`);
+            }
+        } catch (error) {
+
         }
     }
 
