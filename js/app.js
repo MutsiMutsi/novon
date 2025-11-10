@@ -241,7 +241,7 @@
                             document.getElementById("SeasonTwoPoints").innerText = points;
                         } else {
                             debugger;
-                            console.log("Unknown type from bot:" + msgObj);
+                            console.error("Unknown type from bot:" + msgObj);
                         }
                     } catch {
                         if (lastReward == undefined) {
@@ -286,19 +286,15 @@
                             chatInput.setAttribute('contenteditable', true);
                             chatDonateButton.style.display = 'block';
                             chatInput.textContent = '';
-
-                            console.log("FIRST SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
                             return;
                         }
                         else if (id === qualityChangedSegmentId) {
                             appendFirstSegment(data);
                             nextSegmentId = id + 1;
-                            console.log("QUALITY SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
                             return;
                         }
 
                         if (id < nextSegmentId) {
-                            console.log("DUPLICATE SEGMENT RECEIVED, IGNORE | EXPECTING: " + nextSegmentId);
                             return;
                         }
 
@@ -306,8 +302,6 @@
                             // Out of order — store for later
                             pendingSegments.set(id, data);
                             consecutiveOutOfOrderSegmentReceived++;
-
-                            console.log(`OUT OF ORDER SEGMENT ${id} RECEIVED | EXPECTING: ${nextSegmentId}`);
 
                             // Too many consecutive out-of-order segments → skip ahead
                             if (consecutiveOutOfOrderSegmentReceived >= MAX_OUT_OF_ORDER_BEFORE_SKIP) {
@@ -328,7 +322,6 @@
                                 appendFirstSegment(nextData); // restart playback chain
                                 nextSegmentId = nextAvailableId + 1;
                                 consecutiveOutOfOrderSegmentReceived = 0;
-                                console.log(`SKIP AHEAD SEGMENT ${nextAvailableId} APPENDED AS FIRST | EXPECTING: ${nextSegmentId}`);
 
                                 // Continue with any immediately following segments
                                 while (pendingSegments.has(nextSegmentId)) {
@@ -336,7 +329,6 @@
                                     pendingSegments.delete(nextSegmentId);
                                     appendNextSegment(nextData);
                                     nextSegmentId++;
-                                    console.log("PENDING SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
                                 }
                             }
                             return;
@@ -346,7 +338,6 @@
                         appendNextSegment(data);
                         nextSegmentId++;
                         consecutiveOutOfOrderSegmentReceived = 0;
-                        console.log("SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
 
                         // Flush any queued segments in order
                         while (pendingSegments.has(nextSegmentId)) {
@@ -354,7 +345,6 @@
                             pendingSegments.delete(nextSegmentId);
                             appendNextSegment(nextData);
                             nextSegmentId++;
-                            console.log("PENDING SEGMENT APPENDED | EXPECTING: " + nextSegmentId);
                         }
                     });
                 } else {
@@ -378,23 +368,19 @@
 
                 // Drop chunks from old sessions
                 if (sessionId < currentSessionId) {
-                    console.warn(`Ignoring chunk from old session ${sessionId} (expected ${currentSessionId})`);
                     return;
                 }
                 if (sessionId > currentSessionId) {
                     firstChunk = true;
                     currentSessionId = sessionId;
-                    console.warn(`New session has been started ${sessionId} removing old segments`);
                     segments = {};
                     pendingSegments.clear(); // reset pending
                 }
 
                 if (segmentId < nextSegmentId) {
-                    console.warn(`Ignoring chunk from segment ${segmentId} older than current active segment ${nextSegmentId}`);
                     for (const idStr of Object.keys(segments)) {
                         const id = Number(idStr);
                         if (id < nextSegmentId) {
-                            console.warn(`Deleting old segment ${id} (older than current active segment ${nextSegmentId})`);
                             delete segments[id];
                         }
                     }
@@ -690,7 +676,6 @@
             chatInput.addEventListener('keyup', (event) => {
                 if (event.code === 'Enter' || event.code === 'NumpadEnter') { // Enter key pressed
                     event.preventDefault()
-                    console.log(chatInput.textContent);
                 }
             });
 
@@ -1007,7 +992,6 @@
 
                         try {
                             hash = await client.transferTo(walletAddress, messageDonationTotal, donationId);
-                            console.log(hash);
                             chatDonatePopup.classList.remove('show');
                         } catch (err) {
                             chatInput.setAttribute('contenteditable', true);

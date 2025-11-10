@@ -78,12 +78,17 @@ class LivestreamDebugger {
         document.getElementById('debug-toggle').addEventListener('click', () => {
             const content = document.getElementById('debug-content');
             const btn = document.getElementById('debug-toggle');
+
+            const debugSegmentView = document.getElementById("debugView");
+
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 btn.textContent = 'HIDE';
+                debugSegmentView.style.display = 'block';
             } else {
                 content.style.display = 'none';
                 btn.textContent = 'SHOW';
+                debugSegmentView.style.display = 'none';
             }
         });
     }
