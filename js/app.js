@@ -41,6 +41,8 @@
             var firstChunk = true;
             let nextSegmentId = 0;
             const pendingSegments = new Map();
+
+            var currentSessionId = -1;
             var watchingStreamAddress = '';
 
             var video = null;
@@ -48,7 +50,7 @@
             var transmuxer = null;
 
 
-            const segments = {};
+            var segments = {};
             const CHUNK_SIZE = 64000;
 
             var streamViewers = {};
@@ -363,33 +365,74 @@
             });
 
             function handleChunk(data, onSegmentComplete) {
+                const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+                const dv = new DataView(arrayBuffer);
 
-                var arrayBuffer = data.buffer.slice(data.byteOffset, data.byteLength + data.byteOffset);
+                const sessionId = dv.getUint32(0, true);
+                const segmentId = dv.getUint32(4, true);
+                const chunkId = dv.getUint32(8, true);
+                const totalChunks = dv.getUint32(12, true);
+                const chunkSize = dv.getUint32(16, true);
+                const headerSize = 20;
 
-                const segmentId = new DataView(arrayBuffer, 0, 4).getUint32(0, true);
-                const chunkId = new DataView(arrayBuffer, 4, 4).getUint32(0, true);
-                const totalChunks = new DataView(arrayBuffer, 8, 4).getUint32(0, true);
+                // Drop chunks from old sessions
+                if (sessionId < currentSessionId) {
+                    console.warn(`Ignoring chunk from old session ${sessionId} (expected ${currentSessionId})`);
+                    return;
+                }
+                if (sessionId > currentSessionId) {
+                    firstChunk = true;
+                    currentSessionId = sessionId;
+                    console.warn(`New session has been started ${sessionId} removing old segments`);
+                    segments = {};
+                    pendingSegments.clear(); // reset pending
+                }
 
+                if (segmentId < nextSegmentId) {
+                    console.warn(`Ignoring chunk from segment ${segmentId} older than current active segment ${nextSegmentId}`);
+                    for (const idStr of Object.keys(segments)) {
+                        const id = Number(idStr);
+                        if (id < nextSegmentId) {
+                            console.warn(`Deleting old segment ${id} (older than current active segment ${nextSegmentId})`);
+                            delete segments[id];
+                        }
+                    }
+                    return;
+                }
+
+                // Initialize this segment if needed
                 if (!segments[segmentId]) {
                     segments[segmentId] = {
-                        data: new Uint8Array(totalChunks * CHUNK_SIZE),
+                        data: new Uint8Array(totalChunks * chunkSize),
                         chunksReceived: 0,
                         totalChunks,
-                        bytesReceived: 0
+                        chunkSize,
+                        bytesReceived: 0,
+                        received: new Array(totalChunks).fill(false)
                     };
                 }
 
                 const segment = segments[segmentId];
-                let dataSlice = data.slice(12);
-                segment.data.set(dataSlice, chunkId * CHUNK_SIZE);
-                segment.chunksReceived++;
+                const dataSlice = new Uint8Array(arrayBuffer, headerSize);
+
+                // Store chunk
+                segment.data.set(dataSlice, chunkId * chunkSize);
+                if (!segment.received[chunkId]) {
+                    segment.received[chunkId] = true;
+                    segment.chunksReceived++;
+                }
                 segment.bytesReceived += dataSlice.length;
 
+                // Update debug overlay
+                updateDebugView();
+
+                // If all chunks have arrived, deliver the segment
                 if (segment.chunksReceived === segment.totalChunks) {
                     onSegmentComplete(segmentId, segment.data.slice(0, segment.bytesReceived));
                     delete segments[segmentId];
+                    updateDebugView();
                 }
-            };
+            }
 
             async function appendFirstSegment(chunk) {
                 await appendSemaphore.acquire()
@@ -815,7 +858,14 @@
                 // Request channel info
                 client.send(address, 'thumbnail').then(async (reply) => {
                     // Assuming you have the base64 string for the JPEG image in a variable called base64String
-                    const base64 = await bufferToBase64(reply);
+
+                    // Convert to a Uint8Array
+                    const bytes = new Uint8Array(Object.values(reply));
+
+                    // Convert binary bytes → base64
+                    let binary = '';
+                    bytes.forEach(b => binary += String.fromCharCode(b));
+                    const base64 = btoa(binary);
                     streamPreview.children[0].children[0].src = `data:image/jpeg;base64,${base64}`; // Set the base64 data URI
 
                     if (streamPreviewContainer.contains(streamPreviews[address])) {
@@ -1118,6 +1168,40 @@
                 //remove button
                 message.children[0].removeChild(message.querySelector('a'));
             }
+
+
+
+            function updateDebugView() {
+                const container = document.getElementById("debugView");
+                container.innerHTML = "";
+
+                const ids = Object.keys(segments).sort((a, b) => a - b);
+                for (const id of ids) {
+                    const seg = segments[id];
+                    const row = document.createElement("div");
+                    row.className = "segment-row";
+
+                    const label = document.createElement("div");
+                    label.className = "segment-label";
+                    label.textContent = id === nextSegmentId
+                        ? `▶ Seg ${id}`
+                        : `Seg ${id}`;
+
+                    const bar = document.createElement("div");
+                    bar.className = "chunk-bar";
+                    for (let i = 0; i < seg.totalChunks; i++) {
+                        const c = document.createElement("div");
+                        c.className = "chunk";
+                        if (seg.received[i]) c.classList.add("received");
+                        if (id == nextSegmentId && !seg.received[i]) c.classList.add("expected");
+                        bar.appendChild(c);
+                    }
+
+                    row.appendChild(label);
+                    row.appendChild(bar);
+                    container.appendChild(row);
+                }
+            }
         }
     }
     // Only expose what's necessary (e.g., initialization function)
@@ -1140,12 +1224,15 @@
         }
 
         async Setup() {
+            debugger;
+            let secureEnvironment = window.location.protocol == "https:";
+
             this.client = new nkn.MultiClient({
                 numSubClients: numSubClients,
                 originalClient: false,
                 seed: this.wallet.getSeed(),
-                tls: true,
-                webrtc: true,
+                tls: secureEnvironment ? true : false,
+                webrtc: secureEnvironment ? true : false,
             });
 
             let connectedNodes = 0;
