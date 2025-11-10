@@ -899,6 +899,12 @@
 
             function watchStream(address) {
 
+                firstChunk = true;
+                nextSegmentId = 0;
+                pendingSegments.clear();
+                segments = {};
+                currentSessionId = -1;
+
                 //If username is registerd use the username
                 if (addressbook[address] != null) {
                     const username = addressbook[address].name;
@@ -1227,7 +1233,6 @@
         }
 
         async Setup() {
-            debugger;
             let secureEnvironment = window.location.protocol == "https:";
             this.client = new nkn.MultiClient({
                 numSubClients: numSubClients,

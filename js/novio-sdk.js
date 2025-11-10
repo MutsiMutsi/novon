@@ -663,7 +663,12 @@ class NovioWalletButton extends HTMLElement {
                 throw new Error('WALLET_NOT_INSTALLED');
             }
 
-            const isValid = await window.novio.novioSignIn();
+            var useClient = document.querySelector('novio-connect').getAttribute('useClient');
+            var useTls = document.querySelector('novio-connect').getAttribute('useTls');
+            var useMessageEncryption = document.querySelector('novio-connect').getAttribute('useMessageEncryption');
+            var clientIdentifier = document.querySelector('novio-connect').getAttribute('clientIdentifier');
+
+            const isValid = await window.novio.novioSignIn(useClient, useTls, useMessageEncryption, clientIdentifier);
             if (!isValid) {
                 throw new Error('SIGNATURE_FAILED');
             } else {
