@@ -569,3 +569,23 @@ a {
 .chunk.expected {
   background: #ffc107;
 } /* yellow */
+
+.scrolling-text-wrapper {
+  width: 100%; /* Set the visible width */
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.scrolling-text-wrapper h6 {
+  display: inline-block;
+  padding-left: 0%; /* Start off-screen to the right */
+}
+
+@keyframes scroll-text {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}

@@ -187,8 +187,9 @@
             }, 500);
 
             //Singe page logic
-            const currentPath = window.location.pathname.substring(1);
+            let currentPath = window.location.pathname.substring(1);
             if (currentPath.length > 0) {
+                currentPath = "novontv." + currentPath.split('.').slice(-1)[0];
                 watchStream(currentPath);
             } else {
                 document.getElementById('previewContainer').style.display = 'block';
@@ -821,17 +822,19 @@
                 });
             }
 
-            function createStreamPreviewElement(address, title) {
-
-                var displayAddr = address
-                if (addressbook[address] != null) {
-                    displayAddr = addressbook[address].name;
+            function createStreamPreviewElement(pubkey, title) {
+                let address = "novontv." + pubkey;
+                let displayAddr = pubkey
+                if (addressbook[pubkey] != null) {
+                    displayAddr = addressbook[pubkey].name;
                 }
 
                 const htmlString = DOMPurify.sanitize(
                     `<div class="stream-preview">
               <a><img id="thumbnail" class="stream-preview-image"></a>
-              <h6 style="margin-bottom: 0.5rem;">${title}</h6>
+              <div class="scrolling-text-wrapper">
+                <h6 style="margin-bottom: 0.5rem;">${title}</h6>
+              </div>
               <span class="address">
                 ${displayAddr}
               </span>
@@ -901,7 +904,7 @@
                     const username = addressbook[address].name;
                     history.pushState({}, "", username)
                 } else {
-                    history.pushState({}, "", address)
+                    history.pushState({}, "", address.split('.').slice(-1)[0])
                 }
                 document.getElementById('previewContainer').style.display = 'none';
 
@@ -1226,13 +1229,13 @@
         async Setup() {
             debugger;
             let secureEnvironment = window.location.protocol == "https:";
-
             this.client = new nkn.MultiClient({
                 numSubClients: numSubClients,
                 originalClient: false,
                 seed: this.wallet.getSeed(),
                 tls: secureEnvironment ? true : false,
                 webrtc: secureEnvironment ? true : false,
+                identifier: 'novontv',
             });
 
             let connectedNodes = 0;
